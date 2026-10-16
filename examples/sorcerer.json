@@ -1,0 +1,215 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {
+    "race": [
+      "con",
+      "dex"
+    ]
+  },
+  "asiBonuses": {
+    "cha": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [
+    {
+      "name": "Fire Bolt",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    },
+    {
+      "name": "Mage Hand",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    },
+    {
+      "name": "Prestidigitation",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    },
+    {
+      "name": "Light",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    },
+    {
+      "name": "Shield",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    },
+    {
+      "name": "Magic Missile",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    },
+    {
+      "name": "Scorching Ray",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    },
+    {
+      "name": "Fireball",
+      "source": "PHB",
+      "cls": "Sorcerer",
+      "prepared": true
+    }
+  ],
+  "slotsUsed": [
+    1,
+    1
+  ],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex50",
+      "qty": 2,
+      "equipped": false,
+      "attuned": false,
+      "name": "Dagger",
+      "source": "PHB"
+    },
+    {
+      "id": "ex51",
+      "qty": 1,
+      "equipped": false,
+      "attuned": false,
+      "name": "Quarterstaff",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "arcana",
+      "intimidation"
+    ],
+    "skill:race": [
+      "perception",
+      "insight"
+    ],
+    "lang:race": [
+      "draconic"
+    ],
+    "lang:background": [
+      "dwarvish"
+    ],
+    "tool:background": [
+      "dragonchess set"
+    ]
+  },
+  "featureChoices": {
+    "of:Sorcerer:cls:Metamagic": [
+      "Quickened Spell|PHB",
+      "Twinned Spell|PHB"
+    ]
+  },
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [],
+  "overrides": {},
+  "alignment": "Neutral",
+  "xp": 0,
+  "notes": {
+    "personality": "",
+    "ideals": "",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: Draconic Resilience (AC 13+DEX, +1 HP/level), Font of Magic converter in Spellcasting (create slots / slots to points), Metamagic via Choices, Shield toggle."
+  },
+  "id": "example-sorcerer",
+  "name": "Ember Kastor",
+  "race": {
+    "name": "Half-Elf",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Noble",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Sorcerer",
+      "source": "PHB",
+      "level": 5,
+      "hpRolls": [],
+      "subclass": {
+        "name": "Draconic Bloodline",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 8,
+    "dex": 14,
+    "con": 14,
+    "int": 10,
+    "wis": 12,
+    "cha": 15
+  },
+  "actions": [
+    {
+      "id": "ex52",
+      "kind": "spell",
+      "ref": {
+        "name": "Fire Bolt",
+        "source": "PHB"
+      },
+      "cls": "Sorcerer",
+      "slot": 0
+    },
+    {
+      "id": "ex53",
+      "kind": "spell",
+      "ref": {
+        "name": "Fireball",
+        "source": "PHB"
+      },
+      "cls": "Sorcerer",
+      "slot": 3
+    }
+  ]
+}

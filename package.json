@@ -1,0 +1,16 @@
+{
+  "name": "dnd-character-manager",
+  "private": true,
+  "type": "module",
+  "description": "Offline D&D 5e (2014) character manager — static site, no build step",
+  "scripts": {
+    "test": "node rules.test.mjs && node e2e.test.mjs",
+    "test:rules": "node rules.test.mjs",
+    "test:e2e": "node e2e.test.mjs",
+    "examples": "node tools/mkexamples.mjs",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "playwright-core": "1.49.1"
+  }
+}

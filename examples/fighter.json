@@ -1,0 +1,185 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "str": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex38",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Greatsword",
+      "source": "PHB"
+    },
+    {
+      "id": "ex39",
+      "qty": 1,
+      "equipped": false,
+      "attuned": false,
+      "name": "Longbow",
+      "source": "PHB"
+    },
+    {
+      "id": "ex40",
+      "qty": 20,
+      "equipped": false,
+      "attuned": false,
+      "name": "Arrow",
+      "source": "PHB"
+    },
+    {
+      "id": "ex41",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Chain Mail",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "perception",
+      "survival"
+    ],
+    "lang:race": [
+      "orc"
+    ],
+    "tool:background": [
+      "dice set"
+    ],
+    "tool:sub": [
+      "smith's tools"
+    ]
+  },
+  "featureChoices": {
+    "of:Fighter:cls:Fighting Style": [
+      "Great Weapon Fighting|PHB"
+    ],
+    "of:Fighter:sub:Maneuvers": [
+      "Riposte|PHB",
+      "Trip Attack|PHB",
+      "Precision Attack|PHB"
+    ]
+  },
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [],
+  "overrides": {},
+  "alignment": "Lawful neutral",
+  "xp": 0,
+  "notes": {
+    "personality": "",
+    "ideals": "",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: Extra Attack (2 attacks), Second Wind (heals 1d10+5), Action Surge, Superiority Dice d8 with maneuver DC, three maneuvers via Choices."
+  },
+  "id": "example-fighter",
+  "name": "Rhea Ironclad",
+  "race": {
+    "name": "Human",
+    "source": "PHB"
+  },
+  "subrace": {
+    "name": "",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Soldier",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Fighter",
+      "source": "PHB",
+      "level": 5,
+      "hpRolls": [],
+      "subclass": {
+        "name": "Battle Master",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 16,
+    "dex": 14,
+    "con": 15,
+    "int": 11,
+    "wis": 11,
+    "cha": 9
+  },
+  "actions": [
+    {
+      "id": "ex42",
+      "kind": "weapon",
+      "ref": "ex38",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex43",
+      "kind": "weapon",
+      "ref": "ex39",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex44",
+      "kind": "custom",
+      "name": "Unarmed Strike",
+      "group": "action",
+      "ability": "str",
+      "prof": true,
+      "addMod": true,
+      "unarmed": true,
+      "dmgType": "bludgeoning"
+    }
+  ]
+}

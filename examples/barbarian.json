@@ -1,0 +1,173 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "str": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex1",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Greataxe",
+      "source": "PHB"
+    },
+    {
+      "id": "ex2",
+      "qty": 4,
+      "equipped": false,
+      "attuned": false,
+      "name": "Javelin",
+      "source": "PHB"
+    },
+    {
+      "id": "ex3",
+      "qty": 1,
+      "equipped": false,
+      "attuned": false,
+      "name": "Backpack",
+      "source": "PHB"
+    },
+    {
+      "id": "ex4",
+      "qty": 1,
+      "equipped": false,
+      "attuned": false,
+      "name": "Bedroll",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "perception",
+      "animal handling"
+    ],
+    "lang:background": [
+      "giant"
+    ]
+  },
+  "featureChoices": {
+    "fo:sf:Totem Warrior:Totem Spirit:3": [
+      "Bear"
+    ],
+    "fo:sf:Totem Warrior:Aspect of the Beast:6": [
+      "Elk"
+    ]
+  },
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [],
+  "overrides": {},
+  "alignment": "Chaotic good",
+  "xp": 0,
+  "notes": {
+    "personality": "Shows his scars with pride; speaks to the bear spirit before every fight.",
+    "ideals": "",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "Raised among the northern clans after his village fell.",
+    "other": "Showcase: Rage (bonus action, uses), Bear totem resistance and Elk aspect via Choices, Relentless Endurance, Extra Attack."
+  },
+  "id": "example-barbarian",
+  "name": "Thorgar Bonebreaker",
+  "race": {
+    "name": "Half-Orc",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Outlander",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Barbarian",
+      "source": "PHB",
+      "level": 6,
+      "hpRolls": [],
+      "subclass": {
+        "name": "Path of the Totem Warrior",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 15,
+    "dex": 14,
+    "con": 14,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "actions": [
+    {
+      "id": "ex5",
+      "kind": "weapon",
+      "ref": "ex1",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex6",
+      "kind": "weapon",
+      "ref": "ex2",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex7",
+      "kind": "custom",
+      "name": "Unarmed Strike",
+      "group": "action",
+      "ability": "str",
+      "prof": true,
+      "addMod": true,
+      "unarmed": true,
+      "dmgType": "bludgeoning"
+    }
+  ]
+}

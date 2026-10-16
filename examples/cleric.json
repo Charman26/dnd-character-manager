@@ -1,0 +1,224 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "wis": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [
+    {
+      "name": "Guidance",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    },
+    {
+      "name": "Sacred Flame",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    },
+    {
+      "name": "Spare the Dying",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    },
+    {
+      "name": "Healing Word",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    },
+    {
+      "name": "Guiding Bolt",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    },
+    {
+      "name": "Prayer of Healing",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    },
+    {
+      "name": "Spirit Guardians",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    },
+    {
+      "name": "Mass Healing Word",
+      "source": "PHB",
+      "cls": "Cleric",
+      "prepared": true
+    }
+  ],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex31",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Mace",
+      "source": "PHB"
+    },
+    {
+      "id": "ex32",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Shield",
+      "source": "PHB"
+    },
+    {
+      "id": "ex33",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Chain Mail",
+      "source": "PHB"
+    },
+    {
+      "id": "ex34",
+      "qty": 2,
+      "equipped": false,
+      "attuned": false,
+      "name": "Holy Water (flask)",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "medicine",
+      "history"
+    ],
+    "lang:background": [
+      "elvish",
+      "halfling"
+    ],
+    "tool:race": [
+      "smith's tools"
+    ]
+  },
+  "featureChoices": {},
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [],
+  "overrides": {},
+  "alignment": "Lawful good",
+  "xp": 0,
+  "notes": {
+    "personality": "",
+    "ideals": "",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: Life domain spells always prepared (★), Channel Divinity (Turn Undead DC, Preserve Life 25 HP), Disciple of Life note, Dwarven Toughness HP."
+  },
+  "id": "example-cleric",
+  "name": "Brother Aldric",
+  "race": {
+    "name": "Dwarf",
+    "source": "PHB"
+  },
+  "subrace": {
+    "name": "Hill",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Acolyte",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Cleric",
+      "source": "PHB",
+      "level": 5,
+      "hpRolls": [],
+      "subclass": {
+        "name": "Life Domain",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 14,
+    "dex": 8,
+    "con": 15,
+    "int": 10,
+    "wis": 15,
+    "cha": 12
+  },
+  "actions": [
+    {
+      "id": "ex35",
+      "kind": "weapon",
+      "ref": "ex31",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex36",
+      "kind": "spell",
+      "ref": {
+        "name": "Sacred Flame",
+        "source": "PHB"
+      },
+      "cls": "Cleric",
+      "slot": 0
+    },
+    {
+      "id": "ex37",
+      "kind": "spell",
+      "ref": {
+        "name": "Guiding Bolt",
+        "source": "PHB"
+      },
+      "cls": "Cleric",
+      "slot": 1
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "wis": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [
+    {
+      "name": "Shillelagh",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Produce Flame",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Guidance",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Healing Word",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Entangle",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Moonbeam",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Call Lightning",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Conjure Animals",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    },
+    {
+      "name": "Thunderwave",
+      "source": "PHB",
+      "cls": "Druid",
+      "prepared": true
+    }
+  ],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex8",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Scimitar",
+      "source": "PHB"
+    },
+    {
+      "id": "ex9",
+      "qty": 1,
+      "equipped": false,
+      "attuned": false,
+      "name": "Quarterstaff",
+      "source": "PHB"
+    },
+    {
+      "id": "ex10",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Leather Armor",
+      "source": "PHB"
+    },
+    {
+      "id": "ex11",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Shield",
+      "source": "PHB"
+    },
+    {
+      "id": "ex12",
+      "qty": 1,
+      "equipped": false,
+      "attuned": false,
+      "name": "Herbalism Kit",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "nature",
+      "perception"
+    ],
+    "lang:background": [
+      "gnomish"
+    ]
+  },
+  "featureChoices": {},
+  "featureUses": {
+    "f:Wild Shape": 1
+  },
+  "actionSlots": {},
+  "shape": {
+    "name": "Brown Bear",
+    "source": "MM",
+    "hp": 34,
+    "max": 34
+  },
+  "companions": [],
+  "overrides": {},
+  "alignment": "Neutral good",
+  "xp": 0,
+  "notes": {
+    "personality": "Prefers the company of bears to people.",
+    "ideals": "",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: Wild Shape (Moon druid: CR 2 beasts, bonus action), beast HP pool, physical stats and attacks replaced; press Revert. Toggle Shillelagh: the Quarterstaff action switches to WIS and a d8."
+  },
+  "id": "example-druid",
+  "name": "Willow Thornsong",
+  "race": {
+    "name": "Elf",
+    "source": "PHB"
+  },
+  "subrace": {
+    "name": "Wood",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Hermit",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Druid",
+      "source": "PHB",
+      "level": 6,
+      "hpRolls": [],
+      "subclass": {
+        "name": "Circle of the Moon",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 10,
+    "dex": 14,
+    "con": 14,
+    "int": 12,
+    "wis": 15,
+    "cha": 8
+  },
+  "actions": [
+    {
+      "id": "ex13",
+      "kind": "weapon",
+      "ref": "ex8",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex14",
+      "kind": "weapon",
+      "ref": "ex9",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex15",
+      "kind": "spell",
+      "ref": {
+        "name": "Produce Flame",
+        "source": "PHB"
+      },
+      "cls": "Druid",
+      "slot": 0
+    }
+  ]
+}

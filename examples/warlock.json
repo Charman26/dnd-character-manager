@@ -1,0 +1,213 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "cha": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [
+    {
+      "name": "Eldritch Blast",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Mage Hand",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Minor Illusion",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Hex",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Armor of Agathys",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Hold Person",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Misty Step",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Fireball",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    },
+    {
+      "name": "Find Familiar",
+      "source": "PHB",
+      "cls": "Warlock",
+      "prepared": true
+    }
+  ],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex26",
+      "qty": 2,
+      "equipped": false,
+      "attuned": false,
+      "name": "Dagger",
+      "source": "PHB"
+    },
+    {
+      "id": "ex27",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Leather Armor",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "arcana",
+      "intimidation"
+    ]
+  },
+  "featureChoices": {
+    "of:Warlock:cls:Eldritch Invocations": [
+      "Agonizing Blast|PHB",
+      "Devil's Sight|PHB",
+      "Mask of Many Faces|PHB"
+    ],
+    "of:Warlock:cls:Pact Boon": [
+      "Pact of the Chain|PHB"
+    ]
+  },
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [
+    {
+      "id": "ex30",
+      "name": "Imp",
+      "source": "MM",
+      "hp": 10,
+      "max": 10,
+      "nick": "Sizzle"
+    }
+  ],
+  "overrides": {},
+  "alignment": "Chaotic neutral",
+  "xp": 0,
+  "notes": {
+    "personality": "",
+    "ideals": "",
+    "bonds": "Sizzle the imp never leaves my shoulder.",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: invocations and pact boon via Choices (Agonizing Blast adds CHA to Eldritch Blast), Hex toggle, tiefling innate spells, imp familiar in Companions, pact slots."
+  },
+  "id": "example-warlock",
+  "name": "Mirela Ashgrave",
+  "race": {
+    "name": "Tiefling",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Charlatan",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Warlock",
+      "source": "PHB",
+      "level": 5,
+      "hpRolls": [],
+      "subclass": {
+        "name": "The Fiend",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 8,
+    "dex": 14,
+    "con": 14,
+    "int": 12,
+    "wis": 10,
+    "cha": 15
+  },
+  "actions": [
+    {
+      "id": "ex28",
+      "kind": "spell",
+      "ref": {
+        "name": "Eldritch Blast",
+        "source": "PHB"
+      },
+      "cls": "Warlock",
+      "slot": 0
+    },
+    {
+      "id": "ex29",
+      "kind": "spell",
+      "ref": {
+        "name": "Fireball",
+        "source": "PHB"
+      },
+      "cls": "Warlock",
+      "slot": 3
+    }
+  ]
+}

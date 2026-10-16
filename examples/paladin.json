@@ -1,0 +1,178 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "str": 1,
+    "cha": 1
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [
+    {
+      "name": "Bless",
+      "source": "PHB",
+      "cls": "Paladin",
+      "prepared": true
+    },
+    {
+      "name": "Cure Wounds",
+      "source": "PHB",
+      "cls": "Paladin",
+      "prepared": true
+    },
+    {
+      "name": "Shield of Faith",
+      "source": "PHB",
+      "cls": "Paladin",
+      "prepared": true
+    },
+    {
+      "name": "Aid",
+      "source": "PHB",
+      "cls": "Paladin",
+      "prepared": true
+    }
+  ],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex21",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Longsword",
+      "source": "PHB"
+    },
+    {
+      "id": "ex22",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Shield",
+      "source": "PHB"
+    },
+    {
+      "id": "ex23",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Chain Mail",
+      "source": "PHB"
+    },
+    {
+      "id": "ex24",
+      "qty": 5,
+      "equipped": false,
+      "attuned": false,
+      "name": "Javelin",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "athletics",
+      "persuasion"
+    ],
+    "lang:background": [
+      "halfling",
+      "dwarvish"
+    ]
+  },
+  "featureChoices": {
+    "of:Paladin:cls:Fighting Style": [
+      "Defense|PHB"
+    ]
+  },
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [],
+  "overrides": {},
+  "alignment": "Lawful good",
+  "xp": 0,
+  "notes": {
+    "personality": "",
+    "ideals": "Honor.",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: Divine Smite (pick slot, spends it), Lay on Hands pool (25), Sacred Weapon toggle via Channel Divinity, Oath spells always prepared, Breath Weapon, Defense style via Choices."
+  },
+  "id": "example-paladin",
+  "name": "Seraphine Vale",
+  "race": {
+    "name": "Dragonborn",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Acolyte",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Paladin",
+      "source": "PHB",
+      "level": 5,
+      "hpRolls": [],
+      "subclass": {
+        "name": "Oath of Devotion",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 15,
+    "dex": 10,
+    "con": 14,
+    "int": 8,
+    "wis": 12,
+    "cha": 13
+  },
+  "actions": [
+    {
+      "id": "ex25",
+      "kind": "weapon",
+      "ref": "ex21",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    }
+  ]
+}

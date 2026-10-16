@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>D&amp;D Character Manager</title>
+  <meta name="description" content="Offline D&D 5e (2014) character manager">
+  <meta name="theme-color" content="#7e2513">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <button data-act="home" aria-label="Characters">☰</button>
+    <h1 id="title">D&amp;D 5e Characters</h1>
+    <button data-act="lookup" aria-label="Look up rules">🔍</button>
+  </header>
+  <main id="app"><p class="muted">Loading…</p></main>
+  <div id="dice" class="dicebar"></div>
+  <dialog id="dlg"><form method="dialog" class="x"><button aria-label="Close">✕</button></form><div id="dlgBody" class="dlgin"></div></dialog>
+  <dialog id="info"><form method="dialog" class="x"><button aria-label="Close">✕</button></form><div id="infoBody" class="dlgin"></div></dialog>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

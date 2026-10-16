@@ -1,0 +1,160 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "dex": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex16",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Shortsword",
+      "source": "PHB"
+    },
+    {
+      "id": "ex17",
+      "qty": 10,
+      "equipped": false,
+      "attuned": false,
+      "name": "Dart",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "acrobatics",
+      "insight"
+    ],
+    "tool:class": [
+      "flute"
+    ],
+    "lang:race": [
+      "elvish"
+    ],
+    "lang:background": [
+      "dwarvish"
+    ]
+  },
+  "featureChoices": {},
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [],
+  "overrides": {},
+  "alignment": "Lawful neutral",
+  "xp": 0,
+  "notes": {
+    "personality": "",
+    "ideals": "Balance in all things.",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: Ki Points, Martial Arts strike (d6 at 5th, uses DEX), Flurry of Blows / Patient Defense / Step of the Wind / Stunning Strike (DC from WIS)."
+  },
+  "id": "example-monk",
+  "name": "Kael Windstep",
+  "race": {
+    "name": "Human",
+    "source": "PHB"
+  },
+  "subrace": {
+    "name": "",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Hermit",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Monk",
+      "source": "PHB",
+      "level": 5,
+      "hpRolls": [],
+      "subclass": {
+        "name": "Way of the Open Hand",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 11,
+    "dex": 16,
+    "con": 13,
+    "int": 11,
+    "wis": 15,
+    "cha": 9
+  },
+  "actions": [
+    {
+      "id": "ex18",
+      "kind": "weapon",
+      "ref": "ex16",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex19",
+      "kind": "weapon",
+      "ref": "ex17",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex20",
+      "kind": "custom",
+      "name": "Unarmed Strike",
+      "group": "action",
+      "ability": "str",
+      "prof": true,
+      "addMod": true,
+      "unarmed": true,
+      "dmgType": "bludgeoning"
+    }
+  ]
+}

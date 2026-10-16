@@ -1,0 +1,217 @@
+{
+  "setupDone": true,
+  "profV": 2,
+  "abilityMethod": "manual",
+  "abilityAssign": {},
+  "rolledPool": null,
+  "abilityChoices": {},
+  "asiBonuses": {
+    "cha": 2
+  },
+  "skillProfs": {},
+  "saveProfs": {},
+  "extraProfs": {
+    "armor": [],
+    "weapon": [],
+    "tool": [],
+    "lang": []
+  },
+  "hp": {
+    "current": null,
+    "temp": 0
+  },
+  "hitDiceUsed": {},
+  "deathSaves": {
+    "s": 0,
+    "f": 0
+  },
+  "inspiration": false,
+  "exhaustion": 0,
+  "conditions": [],
+  "activeToggles": [],
+  "customEffects": {},
+  "customSources": [],
+  "concentration": null,
+  "spells": [
+    {
+      "name": "Vicious Mockery",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    },
+    {
+      "name": "Minor Illusion",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    },
+    {
+      "name": "Healing Word",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    },
+    {
+      "name": "Dissonant Whispers",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    },
+    {
+      "name": "Faerie Fire",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    },
+    {
+      "name": "Shatter",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    },
+    {
+      "name": "Invisibility",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    },
+    {
+      "name": "Hypnotic Pattern",
+      "source": "PHB",
+      "cls": "Bard",
+      "prepared": true
+    }
+  ],
+  "slotsUsed": [],
+  "pactUsed": 0,
+  "inventory": [
+    {
+      "id": "ex45",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Rapier",
+      "source": "PHB"
+    },
+    {
+      "id": "ex46",
+      "qty": 1,
+      "equipped": true,
+      "attuned": false,
+      "name": "Leather Armor",
+      "source": "PHB"
+    },
+    {
+      "id": "ex47",
+      "qty": 1,
+      "equipped": false,
+      "attuned": false,
+      "name": "Lute",
+      "source": "PHB"
+    }
+  ],
+  "currency": {
+    "pp": 0,
+    "gp": 15,
+    "ep": 0,
+    "sp": 0,
+    "cp": 0
+  },
+  "feats": [],
+  "optionalFeatures": [],
+  "resources": [],
+  "profChoices": {
+    "skill:class": [
+      "persuasion",
+      "deception",
+      "insight"
+    ],
+    "skill:sub": [
+      "arcana",
+      "history",
+      "investigation"
+    ],
+    "tool:class": [
+      "lute",
+      "flute",
+      "drum"
+    ],
+    "tool:background": [
+      "viol"
+    ],
+    "expertise:cf:Bard:Expertise:3": [
+      "persuasion",
+      "performance"
+    ]
+  },
+  "featureChoices": {},
+  "featureUses": {},
+  "actionSlots": {},
+  "shape": null,
+  "companions": [],
+  "overrides": {},
+  "alignment": "Chaotic good",
+  "xp": 0,
+  "notes": {
+    "personality": "",
+    "ideals": "",
+    "bonds": "",
+    "flaws": "",
+    "backstory": "",
+    "other": "Showcase: Bardic Inspiration d8 (recharges on short rest from 5th), Cutting Words reaction, Jack of All Trades, Expertise picks."
+  },
+  "id": "example-bard",
+  "name": "Lyra Quickstring",
+  "race": {
+    "name": "Halfling",
+    "source": "PHB"
+  },
+  "subrace": {
+    "name": "Lightfoot",
+    "source": "PHB"
+  },
+  "background": {
+    "name": "Entertainer",
+    "source": "PHB"
+  },
+  "classes": [
+    {
+      "name": "Bard",
+      "source": "PHB",
+      "level": 5,
+      "hpRolls": [],
+      "subclass": {
+        "name": "College of Lore",
+        "source": "PHB"
+      }
+    }
+  ],
+  "baseScores": {
+    "str": 8,
+    "dex": 14,
+    "con": 13,
+    "int": 12,
+    "wis": 10,
+    "cha": 15
+  },
+  "actions": [
+    {
+      "id": "ex48",
+      "kind": "weapon",
+      "ref": "ex45",
+      "group": "action",
+      "ability": "auto",
+      "prof": "auto"
+    },
+    {
+      "id": "ex49",
+      "kind": "spell",
+      "ref": {
+        "name": "Vicious Mockery",
+        "source": "PHB"
+      },
+      "cls": "Bard",
+      "slot": 0
+    }
+  ]
+}
