@@ -1,7 +1,7 @@
 // Run: node rules.test.mjs
 import assert from 'node:assert/strict';
 import * as P from './effects.js';
-import { tags, entries } from './data.js';
+import { tags, entries, setRules, spellBook, spellMatches } from './data.js';
 import { mod, profBonus, evalFormula, parseDice, roll, mergeDice, spellSlots, computeCharacter, gatherEffects, computeAction, dmgExpr } from './rules.js';
 
 assert.equal(mod(10), 0); assert.equal(mod(17), 3); assert.equal(mod(8), -1);
@@ -246,5 +246,19 @@ assert.equal(tags('{@book chapter 10|PHB|10}'), 'chapter 10');
 assert.equal(tags('{@card Balance|Deck of Many More Things|BMT}'), 'Balance');
 const tbl = entries({ type: 'table', colLabels: ['d', 'Card'], colStyles: ['col-2 text-center', 'col-10'], rows: [[{ type: 'cell', roll: { exact: 1 } }, { type: 'cell', roll: { exact: 1 }, entry: 'Ace of hearts' }]] });
 assert.match(tbl, /<td style="text-align:center">1<\/td><td style="">Ace of hearts<\/td>/); assert.match(tbl, /width:83\.3%/);
+
+// extra spell lists: filters from the chosen alternative, expanded names, level-gated keys
+const mi = [{ name: 'Bard Spells', known: { _: { _: [{ choose: 'level=0|class=Bard', count: 2 }] } } },
+  { name: 'Wizard Spells', known: { _: { _: [{ choose: 'level=0|class=Wizard', count: 2 }] } }, innate: { _: { daily: { 1: [{ choose: 'level=1|class=Wizard' }] } } } }];
+assert.deepEqual(spellBook(mi, 1, 'Wizard Spells').filters, ['level=0|class=wizard', 'level=1|class=wizard']);
+assert.equal(spellBook(mi, 1, undefined), null, 'no list until Magic Initiate has its class picked');
+const fiend = [{ expanded: { s1: ['burning hands', 'command|phb'] }, known: { 10: [{ choose: 'level=2|school=V' }] } }];
+assert.deepEqual([...spellBook(fiend, 1).names], ['burning hands', 'command']);
+assert.deepEqual(spellBook(fiend, 1).filters, []); assert.deepEqual(spellBook(fiend, 10).filters, ['level=2|school=v']);
+setRules({ spellClasses: { 'shield|phb': ['Wizard', 'Sorcerer'] } });
+const shield = { name: 'Shield', source: 'PHB', level: 1, school: 'A' }, alarm = { name: 'Alarm', source: 'PHB', level: 1, school: 'A', meta: { ritual: true } };
+assert.ok(spellMatches(shield, 'level=1|class=wizard')); assert.ok(!spellMatches(shield, 'level=0;2|class=wizard'));
+assert.ok(!spellMatches(alarm, 'level=1|class=wizard'), 'alarm is not on the stubbed wizard list');
+assert.ok(spellMatches(alarm, 'level=1|school=a;d|components & miscellaneous=ritual')); assert.ok(!spellMatches(shield, 'level=1|components & miscellaneous=ritual'));
 
 console.log('rules.test.mjs: all assertions passed');

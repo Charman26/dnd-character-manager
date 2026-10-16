@@ -6,7 +6,7 @@ import {
 } from './rules.js';
 import {
   D, classArt, imgUrl, downloadRules, setRules, list, find, refOf, lookup, search, CAT_LABEL, SEARCH_GROUPS, subclassesOf, findSubclass, classFeatures,
-  subclassFeatures, subclassLevel, spellClasses, subclassSpellNames, variantBases, resolveItem, esc, entries, detail, spellLevel,
+  subclassFeatures, subclassLevel, spellClasses, subclassSpellNames, spellBook, spellMatches, variantBases, resolveItem, esc, entries, detail, spellLevel,
   spellTime, isConc, itemType, abilityText, itemLine, crNum, creatureType, creatureAc, speedText, statblock, grantedSpells, spellAlternatives,
 } from './data.js';
 
@@ -116,15 +116,23 @@ function resolve(c) {
     }
   }
   // spells granted by subclass (domain/oath/circle), race and feats; Circle of the Land picks its land first
-  const level = classes.reduce((a, k) => a + (k.level || 0), 0) || 1, bonusSpells = [];
+  // spellBooks: extra lists for the spell picker (Magic Initiate, Fey Touched, Divine Soul, patron spells…)
+  const level = classes.reduce((a, k) => a + (k.level || 0), 0) || 1, bonusSpells = [], spellBooks = [];
+  const book = (addl, lvl, key, origin, cls) => {
+    const b = spellBook(addl, lvl, choices[key]?.[0]), alt = spellAlternatives(addl).length && choices[key]?.[0];
+    if (b && !spellBooks.some(x => x.id === `book:${key}`)) spellBooks.push({ ...b, id: `book:${key}`, label: alt ? `${origin}: ${alt}` : origin, cls });
+  };
   const grant = (addl, lvl, key, origin, cls) => {
     const alts = spellAlternatives(addl);
     if (alts.length) choiceGroups.push({ key, label: `${origin}: spell list`, count: 1, options: alts.map(a => ({ value: a, label: a })) });
     for (const sp of grantedSpells(addl, lvl, choices[key]?.[0])) if (!bonusSpells.some(b => b.name === sp.name)) bonusSpells.push({ ...sp, origin, cls });
+    book(addl, lvl, key, origin, cls);
   };
   for (const k of classes) if (k.sub?.additionalSpells) grant(k.sub.additionalSpells, k.level, `as:${k.sub.shortName}`, k.sub.name, k.cls.name);
   for (const x of [race, subrace]) if (x?.additionalSpells) grant(x.additionalSpells, level, `as:${x.name}`, x.name || race?.name);
   for (const f of feats) if (f.data.additionalSpells) grant(f.data.additionalSpells, level, `as:${f.key}`, f.data.name);
+  if (background?.additionalSpells) book(background.additionalSpells, level, `as:${background.name}`, background.name);
+  for (const s of sources) if (s.cat !== 'feat' && s.data?.additionalSpells) book(s.data.additionalSpells, level, `as:${s.key}`, s.name, s.cls);
   // Wild Shape: the beast replaces STR/DEX/CON, AC and speed; its attacks become actions (see compute)
   const shape = c.shape && find('monster', c.shape.name, c.shape.source);
   const bgFeats = (background?.entries || []).flatMap(e => [e, ...(Array.isArray(e?.entries) ? e.entries : [])]).filter(e => e?.name?.startsWith?.('Feature:'));
@@ -140,7 +148,7 @@ function resolve(c) {
     if (d && !c.spells.some(x => x.name === d.name)) sources.push({ key: `spell:${d.name}|${d.source}`, name: d.name, kind: 'spell', cls: b.cls, group: 'Spells', data: d });
   }
   for (const s of c.customSources) sources.push({ key: `custom:${s.id}`, name: s.name, kind: 'custom', group: 'Custom modifiers', data: { entries: s.notes ? [s.notes] : [] }, custom: s });
-  return { race, subrace, background, classes, items, feats, sources, weaponNames: weaponNames(), choiceGroups, bonusSpells, shape, extraEffects: shape ? shapeEffects(shape) : [] };
+  return { race, subrace, background, classes, items, feats, sources, weaponNames: weaponNames(), choiceGroups, bonusSpells, spellBooks, shape, extraEffects: shape ? shapeEffects(shape) : [] };
 }
 
 // option refs inside {type:'options'} blocks -> [{name, level}]
@@ -281,6 +289,7 @@ function homeView() {
 // Blocks in priority order. Each goes into the currently shortest column, so the core blocks
 // head separate columns on wide screens and come first in a single column.
 const BLOCKS = ['abilities', 'saves', 'skills', 'actions', 'spells', 'inventory', 'features', 'companions', 'profs', 'notes'];
+const blocksFor = n => (n === 1 ? ['abilities', 'skills', 'saves', ...BLOCKS.slice(3)] : BLOCKS); // single column: saves below skills
 const JUMP = { abilities: 'Stats', skills: 'Skills', actions: 'Actions', spells: 'Spells', inventory: 'Items', features: 'Features', companions: 'Allies', notes: 'Notes' };
 const colCount = () => (innerWidth >= 1100 ? 3 : innerWidth >= 700 ? 2 : 1);
 const planOk = () => ui.plan?.n === colCount() && ui.plan.id === cur.id;
@@ -288,7 +297,7 @@ function sheetView() {
   const views = { ...statsBlocks(), actions: actionsView(), spells: spellsView(), inventory: inventoryView(), features: featuresView(), companions: companionsView(), notes: notesView() };
   const n = colCount();
   // no plan yet: everything in column 1 so layout() can measure real heights, then distribute
-  const cols = planOk() ? ui.plan.cols : [BLOCKS, ...Array(n - 1).fill([])];
+  const cols = planOk() ? ui.plan.cols : [blocksFor(n), ...Array(n - 1).fill([])];
   return `${cur.setupDone ? '' : setupView()}${statusView()}
   ${n === 1 ? `<nav class=jump>${Object.entries(JUMP).map(([k, l]) => `<button data-act=jump data-b=${k}>${l}</button>`).join('')}</nav>` : ''}
   <div class="grid cols${n}">${cols.map(c => `<div class=col>${c.map(id => `<div class=blk data-blk=${id}>${views[id]}</div>`).join('')}</div>`).join('')}</div>`;
@@ -297,7 +306,7 @@ function sheetView() {
 function layout() {
   if (!cur || !D || planOk()) return;
   const cols = [...document.querySelectorAll('.grid > .col')], hs = cols.map(() => 0), plan = cols.map(() => []);
-  for (const id of BLOCKS) {
+  for (const id of blocksFor(cols.length)) {
     const el = document.querySelector(`[data-blk=${id}]`), i = hs.indexOf(Math.min(...hs));
     hs[i] += el.offsetHeight;
     plan[i].push(id);
@@ -343,7 +352,8 @@ function statusView() {
       <div>${bd('initiative', 'Init')}${r20('initiative', 'Initiative')}</div>
       <div>${bd('speed', 'Speed')}<b>${st.speed.total}</b></div>
       <div>${bd('prof', 'Prof')}<b>${signed(st.prof.total)}</b></div>
-      <div>${bd('passive.perception', 'Passive')}<b>${st['passive.perception'].total}</b></div>
+      <div><button class=lbl data-act=short title="Spend on a short rest">Hit Dice</button><span class=hd>${Object.entries(S.hitDice).sort((a, b) => b[0] - a[0])
+        .map(([f, n]) => `<b>${n - (cur.hitDiceUsed[f] || 0)}d${f}<small>/${n}</small></b>`).join('') || '<b>—</b>'}</span></div>
     </div>
     <div class=chips>
       <label class=chip><input type=checkbox data-path=inspiration ${cur.inspiration ? 'checked' : ''}> Inspiration</label>
@@ -374,6 +384,7 @@ function statsBlocks() {
     ${r20(`check.${a}`, `${ABIL_NAME[a]} check`)}<small>${S.scores[a]}</small></div>`).join('')}</div></section>`,
     saves: `<section class=card><h3>Saving throws</h3>${profChoiceRows(s => s.kind === 'save')}${saves}</section>`,
     skills: `<section class=card><h3>Skills</h3>${profChoiceRows(s => s.kind === 'skill' || s.kind === 'expertise')}${skills}
+    <div class=srow>${bd('passive.perception', 'Passive Perception')}<b>${st['passive.perception'].total}</b></div>
     <div class=srow>${bd('passive.investigation', 'Passive Investigation')}<b>${st['passive.investigation'].total}</b></div>
     <div class=srow>${bd('passive.insight', 'Passive Insight')}<b>${st['passive.insight'].total}</b></div></section>`,
     profs: profsView(),
@@ -424,8 +435,8 @@ function abilityUI() {
   const m = cur.abilityMethod, pool = poolOf(), left = 27 - pointsSpent();
   const ctl = a => {
     const v = cur.baseScores[a];
-    if (m === 'pointbuy') return `<button data-act=pb data-a=${a} data-d=-1 ${v <= 8 ? 'disabled' : ''} aria-label="Lower ${a}">−</button><b class=pbv>${v}</b>`
-      + `<button data-act=pb data-a=${a} data-d=1 ${v >= 15 || POINT[v + 1] - POINT[v] > left ? 'disabled' : ''} aria-label="Raise ${a}">+</button>`;
+    if (m === 'pointbuy') return `<span class=pb><button data-act=pb data-a=${a} data-d=-1 ${v <= 8 ? 'disabled' : ''} aria-label="Lower ${a}">−</button><b class=pbv>${v}</b>`
+      + `<button data-act=pb data-a=${a} data-d=1 ${v >= 15 || POINT[v + 1] - POINT[v] > left ? 'disabled' : ''} aria-label="Raise ${a}">+</button></span>`;
     if (m === 'manual') return `<input type=number min=1 max=30 data-path="baseScores.${a}" value="${v}" aria-label="${ABIL_NAME[a]} base">`;
     return `<select data-act=assign data-a=${a} aria-label="${ABIL_NAME[a]} score">${pool.map((x, i) => {
       const owner = ABIL.find(b => b !== a && cur.abilityAssign[b] === i);
@@ -434,7 +445,7 @@ function abilityUI() {
   };
   const rows = ABIL.map(a => {
     const st = S.stats[`ability.${a}`], bonus = st.total - cur.baseScores[a];
-    return `<tr><th>${ABIL_NAME[a]}</th><td class=ctl>${ctl(a)}</td><td class=muted>${bonus ? signed(bonus) : ''}</td>
+    return `<tr><th><span class=full>${ABIL_NAME[a]}</span><span class=abbr>${a.toUpperCase()}</span></th><td class=ctl>${ctl(a)}</td><td class=muted>${bonus ? signed(bonus) : ''}</td>
       <td><button class=lbl data-act=bd data-k="ability.${a}">${st.total}</button></td><td><b>${signed(mod(st.total))}</b></td></tr>`;
   }).join('');
   return `<div class=seg>${Object.entries(METHODS).map(([k, l]) => `<button class="${m === k ? 'on' : ''}" data-act=method data-m=${k}>${l}</button>`).join('')}</div>
@@ -444,7 +455,7 @@ function abilityUI() {
       roll: `${cur.rolledPool ? `Rolled: <b>${cur.rolledPool.join(', ')}</b>. Assign them like the standard array.` : ''} <button data-act=rollpool>${cur.rolledPool ? 'Reroll' : 'Roll'} 4d6 ×6</button>`,
       manual: 'Type each base score.',
     }[m]}</p>
-    <table class=abtable><tr><th></th><th>Base</th><th>Bonus</th><th>Score</th><th>Mod</th></tr>${rows}</table>
+    <div class=abwrap><table class=abtable><tr><th></th><th>Base</th><th>Bonus</th><th>Score</th><th>Mod</th></tr>${rows}</table></div>
     <p class=note>Bonus = race, feats and ASIs; tap a score for its breakdown.</p>`;
 }
 
@@ -530,6 +541,7 @@ function actionsView() {
         ${r.hit ? `<span>${bd(`act.${a.id}.hit`, 'Hit')}${r20(`act.${a.id}.hit`, `${r.name} attack`)}</span>` : ''}
         ${r.save ? `<span class=pill>DC ${r.save.dc} ${esc(r.save.ability)}</span>` : ''}
         ${r.dmg ? `<span>${bd(`act.${a.id}.dmg`, r.dmgType ? esc(r.dmgType) : 'Dmg')}<button class=num data-act=rdmg data-k="act.${id}.dmg" data-label="${esc(r.name)}">${esc(dmgExpr(r.dmg))}</button></span>` : ''}
+        ${stored && a.kind === 'spell' && r.level ? `<button class=primary data-act=castaction data-i=${i}>Cast <small>(${ORD(r.slot)} slot)</small></button>` : ''}
         ${stored && r.scales ? `<select data-path="actions.${i}.slot" data-type=num aria-label="Slot level">${[1, 2, 3, 4, 5, 6, 7, 8, 9].filter(l => l >= r.level).map(l => opt(l, `${ORD(l)} slot`, l === r.slot)).join('')}</select>` : ''}
         ${!stored && a.slot ? `<select data-path="actionSlots.${a.id}" data-type=num aria-label="Slot level">${Array.from({ length: maxSlot }, (_, l) => opt(l + 1, `${ORD(l + 1)} slot`, l + 1 === a.slot)).join('')}</select>` : ''}
         ${r.versatile ? `<label class=small><input type=checkbox data-path="actions.${i}.versatile" ${a.versatile ? 'checked' : ''}> two-handed</label>` : ''}
@@ -731,12 +743,14 @@ const PICK = {
   spell: { title: 'Add spells', items: spellPickItems, sub: x => `${spellLevel(x)} · ${x.source}`, has: x => cur.spells.some(s => s.name === x.name && s.source === x.source),
     filters: () => {
       const lists = [...new Set(S.spellcasting.map(c => c.list))];
-      return `<div class=inline><select data-path="@pick.cls">${lists.map(l => opt(l, `${l} list`, ui.pick.cls === l)).join('')}${opt('all', 'All spells', ui.pick.cls === 'all')}</select>
+      return `<div class=inline><select data-path="@pick.cls">${lists.map(l => opt(l, `${l} list`, ui.pick.cls === l)).join('')}
+        ${S.R.spellBooks.map(b => opt(b.id, b.label, ui.pick.cls === b.id)).join('')}${opt('all', 'All spells', ui.pick.cls === 'all')}</select>
         <select data-path="@pick.lvl">${opt('castable', 'Castable levels', ui.pick.lvl === 'castable')}${opt('all', 'All levels', ui.pick.lvl === 'all')}
         ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => opt(l, l ? ORD(l) : 'Cantrip', ui.pick.lvl === String(l))).join('')}</select></div>`;
     },
     pick: x => {
-      const sc = S.spellcasting.find(c => c.list === ui.pick.cls) || S.spellcasting[0];
+      const bk = S.R.spellBooks.find(b => b.id === ui.pick.cls);
+      const sc = (bk ? S.spellcasting.find(c => c.cls === bk.cls) : S.spellcasting.find(c => c.list === ui.pick.cls)) || S.spellcasting[0];
       cur.spells.push({ name: x.name, source: x.source, cls: sc?.cls || '', prepared: false });
     } },
   wildshape: {
@@ -772,11 +786,13 @@ const PICK = {
 function spellPickItems() {
   const p = ui.pick, max = Math.max(S.slots.length, S.pact?.level || 0);
   let xs = list('spell');
-  if (p.cls !== 'all') {
+  const bk = S.R.spellBooks.find(b => b.id === p.cls);
+  if (bk) xs = xs.filter(s => bk.names.has(s.name.toLowerCase()) || bk.filters.some(f => spellMatches(s, f)));
+  else if (p.cls !== 'all') {
     const extra = new Set(S.R.classes.filter(k => k.sub && (k.cls?.name === p.cls || S.spellcasting.find(c => c.cls === k.cls?.name)?.list === p.cls)).flatMap(k => [...subclassSpellNames(k.sub)]));
     xs = xs.filter(s => spellClasses(s).includes(p.cls) || extra.has(s.name.toLowerCase()));
   }
-  if (p.lvl === 'castable') xs = xs.filter(s => s.level <= max);
+  if (p.lvl === 'castable') { if (!bk || bk.cls) xs = xs.filter(s => s.level <= max); } // feat/race lists set their own levels, slots or not
   else if (p.lvl !== 'all') xs = xs.filter(s => s.level === +p.lvl);
   return xs.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name)).map(x => ({ x, cat: 'spell' }));
 }
@@ -1008,6 +1024,14 @@ function castView(n, src) {
     ${!lv.length && !pact && !innate ? '<p class=warn>No slots left.</p>' : ''}${d.meta?.ritual ? `<button data-act=castat ${at} data-l=ritual>As ritual (no slot)</button>` : ''}`;
 }
 
+// after a slot is spent: concentration, the spell's on/off toggle, the log line
+function castDone(d, how) {
+  if (isConc(d)) setConc(d.name);
+  const key = `spell:${d.name}|${d.source}`;
+  if (sourceDef(cur, { key, name: d.name, kind: 'spell' }, P)?.toggle && !isOn(key)) cur.activeToggles.push(key);
+  toast(`Cast ${d.name}${how}`);
+}
+
 function shortRestView() {
   return `<h2>Short rest</h2><p>Spend hit dice to heal (adds CON mod ${signed(S.vars['mod.con'])}).</p>
     ${Object.entries(S.hitDice).map(([f, n]) => `<button data-act=spendhd data-f=${f} ${n - (cur.hitDiceUsed[f] || 0) <= 0 ? 'disabled' : ''}>Spend d${f} (${n - (cur.hitDiceUsed[f] || 0)}/${n} left)</button>`).join(' ')}
@@ -1114,7 +1138,7 @@ const ACT = {
   },
 
   // setup
-  pick: el => openPicker(el.dataset.what, el.dataset.what === 'spell' ? { cls: S.spellcasting[0]?.list || 'all', lvl: 'castable' } : {}),
+  pick: el => openPicker(el.dataset.what, el.dataset.what === 'spell' ? { cls: S.spellcasting[0]?.list || S.R.spellBooks[0]?.id || 'all', lvl: 'castable' } : {}),
   pickrow: el => {
     const it = ui.pick.results[idx(el)], cfg = PICK[ui.pick.kind];
     cfg.pick(it.x, it.cat, it);
@@ -1298,12 +1322,17 @@ const ACT = {
     const d = find('spell', el.dataset.n, el.dataset.s), s = { name: d.name, source: d.source }, l = el.dataset.l;
     if (l === 'pact') cur.pactUsed++;
     else if (!['ritual', 'innate'].includes(l)) cur.slotsUsed[l - 1] = (cur.slotsUsed[l - 1] || 0) + 1;
-    if (isConc(d)) setConc(d.name);
-    const key = `spell:${s.name}|${s.source}`;
-    if (sourceDef(cur, { key, name: s.name, kind: 'spell' }, P)?.toggle && !isOn(key)) cur.activeToggles.push(key);
     for (const a of cur.actions) if (a.kind === 'spell' && a.ref?.name === s.name && +l) a.slot = +l;
-    toast(`Cast ${d.name}${l === 'ritual' ? ' as a ritual' : l === 'innate' ? ' (innate)' : ` (${l === 'pact' ? 'pact slot' : ORD(+l) + ' level'})`}`);
+    castDone(d, l === 'ritual' ? ' as a ritual' : l === 'innate' ? ' (innate)' : ` (${l === 'pact' ? 'pact slot' : ORD(+l) + ' level'})`);
     closeDlg(); commit();
+  },
+  // spell action: spend a slot of its chosen level; none left → the cast dialog offers the other slots / ritual / innate
+  castaction: el => {
+    const a = cur.actions[idx(el)], d = find('spell', a.ref?.name, a.ref?.source), l = +a.slot || d?.level;
+    if (!d) return;
+    if (!spendSlot(l)) return openDlg(() => castView(d.name, d.source));
+    castDone(d, ` (${ORD(l)} level)`);
+    commit();
   },
   conc: el => { const n = el.dataset.n; setConc(cur.concentration === n ? null : n); commit(); },
   delspell: el => { cur.spells.splice(idx(el), 1); commit(); },

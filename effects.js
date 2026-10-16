@@ -84,7 +84,8 @@ export const FEATURES = {
   // paladin
   'divine sense': { uses: { max: '1+mod.cha', reset: 'long' }, actions: [{ group: 'action', use: 1, notes: 'Sense celestials, fiends and undead within 60 ft' }] },
   'lay on hands': { uses: { max: '5*level.paladin', reset: 'long', name: 'Lay on Hands' },
-    actions: [{ group: 'action', use: 5, dice: '5', dmgType: 'healing', notes: 'Spend any amount from the pool (button spends 5; adjust in Status); 5 points cure a disease or poison' }] },
+    actions: [{ group: 'action', use: 1, dice: '1', dmgType: 'healing', notes: 'Each press spends 1 point for 1 HP; press again to heal more' },
+      { name: 'Lay on Hands: Cure', group: 'action', use: 5, notes: 'Cure one disease or neutralize one poison' }] },
   'divine smite': { actions: [{ group: 'other', slot: T, dice: '[min(5,slot+1)]d8', dmgType: 'radiant', notes: 'On a melee weapon hit; +1d8 against undead or fiends' }] },
   'improved divine smite': { effects: [fx('damage.melee', 'add', '1d8', ['weapon'])] },
   'channel divinity|paladin': { uses: { max: 1, reset: 'short', name: 'Channel Divinity' } },

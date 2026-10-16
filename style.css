@@ -73,6 +73,9 @@ details.card > summary::before { content: '▸ '; color: var(--accent); } detail
 .vitals > div { background: var(--chip); border: 1px solid var(--line); border-radius: 4px; padding: .3em .1em; display: flex; flex-direction: column; align-items: center; }
 .vitals .lbl { font: 1rem var(--head); color: var(--accent); }
 .vitals b, .vitals .num { font-size: 1.35rem; }
+.vitals .hd { display: flex; flex-wrap: wrap; justify-content: center; column-gap: .3em; line-height: 1.15; }
+.vitals .hd:has(b + b) b { font-size: 1rem; }
+.vitals .hd small { font-weight: normal; color: var(--muted); }
 .chip { display: inline-flex; align-items: center; gap: .3em; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: .1em .6em; font: .92em var(--sans); }
 .chip.on, .chip.conc { background: var(--on); }
 .chip select { padding: 0 .2em; }
@@ -202,8 +205,10 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
 /* character setup (full width until confirmed) */
 .setuphead { display: flex; align-items: center; gap: .6em; flex-wrap: wrap; border-bottom: 2px solid var(--line); margin-bottom: .4em; }
 .setuphead h2 { margin: 0; }
-.setupgrid { display: grid; gap: 4px 24px; }
-@media (min-width: 800px) { .setupgrid { grid-template-columns: 1fr 1fr; } }
+.setupgrid { display: grid; gap: 4px 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 800px) { .setupgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.setup .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.setup .field > input { min-width: 4em; }
 .seg { display: flex; flex-wrap: wrap; gap: 2px; }
 .seg button { border-radius: 0; flex: 1 1 auto; }
 .seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; }
@@ -216,6 +221,18 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
 .abtable td.ctl select, .abtable td.ctl input { width: 6.5em; }
 .abtable .lbl { font-weight: bold; font-size: 1.1em; }
 .pbv { display: inline-block; min-width: 2em; }
+.abtable .abbr { display: none; }
+/* narrow: abbreviated names, tighter columns, smaller pickers, point-buy +/− stacked beside the value */
+.abwrap { container-type: inline-size; }
+@container (max-width: 400px) {
+  .abtable th, .abtable td { padding: .2em .1em; }
+  .abtable .full { display: none; } .abtable .abbr { display: inline; }
+  .abtable td.ctl select, .abtable td.ctl input { width: 4.2em; padding: .2em .1em; }
+  .pb { display: inline-grid; grid-template: auto auto / auto auto; align-items: center; column-gap: .25em; }
+  .pb .pbv { grid-area: 1 / 1 / 3 / 2; min-width: 1.4em; }
+  .pb button { grid-column: 2; min-height: 0; height: 22px; width: 28px; padding: 0; line-height: 1; }
+  .pb button[data-d="1"] { grid-row: 1; } .pb button[data-d="-1"] { grid-row: 2; }
+}
 
 /* proficiency choices + granted marker */
 .choice { display: flex; flex-wrap: wrap; align-items: center; gap: .3em; margin: .25em 0; font-size: .92em; }
@@ -228,7 +245,7 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
 .profrow { display: grid; grid-template-columns: 6.5em 1fr; gap: .4em; align-items: start; padding: .25em 0; border-bottom: 1px dotted var(--line); }
 .profrow > b { font: 1.05rem var(--head); color: var(--accent); font-weight: normal; padding-top: .35em; }
 .profrow .chips { margin: 0; }
-.profrow select { font-size: .85em; padding: .1em .3em; }
+.profrow select { font-size: .85em; padding: .1em .3em; width: 5.5em; }
 .chip.g { box-shadow: inset 0 0 0 1px #c9a24a; background: var(--on); }
 small.block { display: block; }
 

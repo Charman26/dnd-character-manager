@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- narrower than the 320px layout minimum: lay out at 320px and let the browser scale the page down to fit -->
+  <script>if (screen.width < 320) document.querySelector('meta[name=viewport]').content = 'width=320, viewport-fit=cover';</script>
   <title>D&amp;D Character Manager</title>
   <meta name="description" content="Offline D&D 5e (2014) character manager">
   <meta name="theme-color" content="#7e2513">

@@ -224,8 +224,11 @@ await check('paladin: smite spends the chosen slot; lay on hands spends the pool
   await act('Divine Smite').locator('[data-act=rdmg]', { hasText: /^3d8$/ }).waitFor(); // re-render happens on the next frame
   await act('Divine Smite').locator('[data-act=useaction]').click();
   assert.equal(await page.locator('.slotrow').nth(1).locator('.pip.on').count(), 1);
+  const loh = () => page.locator('.status .res', { hasText: 'Lay on Hands' }).innerText();
   await act('Lay on Hands').locator('[data-act=useaction]').click();
-  assert.match(await page.locator('.status .res', { hasText: 'Lay on Hands' }).innerText(), /20\/25/);
+  assert.match(await loh(), /24\/25/, 'healing spends one point per press');
+  await act('Lay on Hands: Cure').locator('[data-act=useaction]').click();
+  assert.match(await loh(), /19\/25/, 'curing spends five');
   assert.ok(await page.locator('.spell.granted', { hasText: 'Sanctuary' }).count(), 'oath spells are always prepared');
 });
 

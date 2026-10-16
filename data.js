@@ -178,8 +178,9 @@ export function statblock(m) {
 
 // spells granted by a subclass/race/feat `additionalSpells` block up to a level; `pick` chooses between named alternatives (Circle of the Land)
 export const spellAlternatives = addl => (addl?.length > 1 && addl.every(a => a.name) ? addl.map(a => a.name) : []);
+const pickBlock = (addl, pick) => (spellAlternatives(addl).length ? addl.find(x => x.name === pick) : addl?.[0]);
 export function grantedSpells(addl, lvl, pick) {
-  const a = spellAlternatives(addl).length ? addl.find(x => x.name === pick) : addl?.[0];
+  const a = pickBlock(addl, pick);
   const out = [];
   if (!a) return out;
   const add = (v, kind, uses) => { for (const x of [].concat(v || [])) if (typeof x === 'string') out.push({ name: x.split('|')[0].split('#')[0], kind, uses }); };
@@ -195,6 +196,32 @@ export function grantedSpells(addl, lvl, pick) {
   }
   return out;
 }
+
+// spell lists a block opens up, for the spell picker: "choose"/"all" filters (Magic Initiate, Fey Touched, Divine Soul)
+// and expanded lists (warlock patrons). Null when it opens none at this level.
+export function spellBook(addl, lvl, pick) {
+  const a = pickBlock(addl, pick), filters = new Set(), names = new Set();
+  const walk = (v, expanded) => {
+    if (typeof v === 'string') { if (expanded) names.add(v.split('|')[0].split('#')[0].toLowerCase()); return; }
+    if (!v || typeof v !== 'object') return;
+    const f = typeof v.choose === 'string' ? v.choose : v.all;
+    if (typeof f === 'string') filters.add(f.toLowerCase());
+    else if (v.choose?.from) v.choose.from.forEach(x => walk(x, true));
+    else Object.values(v).forEach(x => walk(x, expanded));
+  };
+  for (const kind of ['prepared', 'known', 'innate', 'expanded'])
+    for (const [k, v] of Object.entries(a?.[kind] || {})) if (!/^\d+$/.test(k) || +k <= lvl) walk(v, kind === 'expanded');
+  return filters.size || names.size ? { filters: [...filters], names } : null;
+}
+// does a spell pass a 5etools filter such as "level=0;1|class=wizard|components & miscellaneous=ritual" (lowercase)
+export const spellMatches = (s, filter) => filter.split('|').every(c => {
+  const [k, v = ''] = c.split('='), vs = v.split(';');
+  if (k === 'level') return vs.includes(String(s.level));
+  if (k === 'class') return spellClasses(s).some(n => vs.includes(n.toLowerCase()));
+  if (k === 'school') return vs.includes(String(s.school).toLowerCase());
+  if (k === 'components & miscellaneous') return !vs.includes('ritual') || !!s.meta?.ritual;
+  return true; // ponytail: other keys (spell attack, damage type…) don't narrow the list
+});
 
 // ---------- classes / spells / items ----------
 const byLevel = (a, b) => a.level - b.level;
