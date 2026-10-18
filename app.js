@@ -247,6 +247,36 @@ const pips = (left, max, act, attrs = '', label = '', [on, off] = ['available', 
   aria-label="${esc(label)} ${i + 1} of ${max}, ${i < left ? on : off}" title="${i < left ? cap(on) : cap(off)}: tap to change"></button>`).join('');
 const link = (tag, x) => (x ? `<a class=ref data-tag=${tag} data-name="${esc(x.name)}" data-src="${esc(x.source || '')}">${esc(x.name)}</a>` : '');
 const info = (tag, x) => `<a class="ref icon" data-tag=${tag} data-name="${esc(x.name)}" data-src="${esc(x.source || '')}" title=Details>ⓘ</a>`;
+// icons: game-icons.net symbols (CC BY 3.0) in icons.svg. tools/mkicons.mjs builds it from every literal ic('…') in this file
+const ic = n => `<svg class=ic aria-hidden=true><use href="icons.svg#${n}"></use></svg>`;
+const IC = {
+  abilities: ic('vitruvian-man'), saves: ic('checked-shield'), skills: ic('skills'), actions: ic('crossed-swords'), spells: ic('spell-book'), inventory: ic('knapsack'),
+  features: ic('scroll-unfurled'), companions: ic('wolf-head'), profs: ic('graduate-cap'), notes: ic('quill-ink'), setup: ic('character'),
+  hp: ic('hearts'), ac: ic('round-shield'), initiative: ic('lightning-frequency'), speed: ic('run'), hitDice: ic('dice-eight-faces-eight'),
+  inspiration: ic('inspiration'), exhaustion: ic('tired-eye'), conc: ic('meditation'), death: ic('tombstone'), short: ic('campfire'), long: ic('night-sleep'),
+  temp: ic('temporary-shield'), effects: ic('aura'), shape: ic('paw-print'), xp: ic('upgrade'), alignment: ic('scales'), kit: ic('open-treasure-chest'),
+  adv: ic('thumb-up'), dis: ic('thumb-down'), crit: ic('dice-fire'), choices: ic('interleaved-arrows'), cantrips: ic('sparkles'),
+  cls: ic('visored-helm'), subclass: ic('wizard-face'),
+};
+const ABIL_IC = { str: ic('biceps'), dex: ic('acrobatic'), con: ic('muscular-torso'), int: ic('brain'), wis: ic('owl'), cha: ic('drama-masks') };
+const SKILL_IC = { acrobatics: ic('body-balance'), 'animal handling': ic('paw-heart'), arcana: ic('crystal-ball'), athletics: ic('jump-across'), deception: ic('domino-mask'),
+  history: ic('tied-scroll'), insight: ic('third-eye'), intimidation: ic('shouting'), investigation: ic('magnifying-glass'), medicine: ic('medical-pack'), nature: ic('oak-leaf'),
+  perception: ic('eyeball'), performance: ic('lyre'), persuasion: ic('shaking-hands'), religion: ic('holy-symbol'), 'sleight of hand': ic('snatch'), stealth: ic('hooded-figure'), survival: ic('footprint') };
+const COND_IC = { Blinded: ic('blindfold'), Charmed: ic('charm'), Deafened: ic('sound-off'), Frightened: ic('terror'), Grappled: ic('grab'), Incapacitated: ic('knockout'),
+  Invisible: ic('invisible'), Paralyzed: ic('frozen-body'), Petrified: ic('stone-bust'), Poisoned: ic('poison-bottle'), Prone: ic('falling'), Restrained: ic('crossed-chains'),
+  Stunned: ic('knocked-out-stars'), Unconscious: ic('sleepy') };
+const DMG_IC = { acid: ic('acid'), bludgeoning: ic('flat-hammer'), cold: ic('snowflake-1'), fire: ic('flame'), force: ic('mighty-force'), lightning: ic('lightning-arc'),
+  necrotic: ic('death-skull'), piercing: ic('piercing-sword'), poison: ic('poison'), psychic: ic('psychic-waves'), radiant: ic('sun-radiations'), slashing: ic('quick-slash'),
+  thunder: ic('thunder-struck'), healing: ic('healing') };
+const GROUP_IC = { action: ic('sword-clash'), bonus: ic('fast-arrow'), reaction: ic('shield-reflect'), other: ic('cog'),
+  Weapons: ic('sword-brandish'), Armor: ic('breastplate'), 'Magic items': ic('magic-swirl'), Gear: ic('swap-bag'),
+  Race: ic('elf-ear'), Background: ic('family-house'), Feats: ic('laurel-crown'), 'Class options': ic('rune-stone'), 'Custom modifiers': ic('gears') };
+const PROF_IC = { armor: ic('breastplate'), weapon: ic('sword-brandish'), tool: ic('hammer-nails'), lang: ic('conversation') };
+const NOTE_IC = { personality: ic('tribal-mask'), ideals: ic('star-formation'), bonds: ic('heart-key'), flaws: ic('cracked-mask'), backstory: ic('book-pile'), other: ic('scroll-quill') };
+const METHOD_IC = { array: ic('stone-tablet'), pointbuy: ic('two-coins'), roll: ic('rolling-dice-cup'), manual: ic('quill') };
+const LOOKUP_IC = { Spells: ic('spell-book'), Items: ic('knapsack'), Creatures: ic('dragon-head'), Classes: ic('visored-helm'), Races: ic('elf-ear'), Feats: ic('laurel-crown'),
+  Backgrounds: ic('family-house'), Conditions: ic('bandaged'), Rules: ic('book-cover'), 'Traps & hazards': ic('wolf-trap'), 'Deities & gifts': ic('ankh') };
+
 // section heading with a ⋮ menu holding its less frequent "+ …" buttons (closed by the click handler below)
 const menu = (items, cls = '') => `<details class="menu ${cls}"><summary title="More" aria-label="More options">⋮</summary><div class=menupop>${items}</div></details>`;
 const sechead = (title, items) => `<div class=sechead><h3>${title}</h3>${menu(items)}</div>`;
@@ -301,6 +331,8 @@ function homeView() {
     <label class=field><span>Data repository</span><input id=base type=url placeholder="https://github.com/owner/repo" value="${esc(meta?.src || meta?.base || '')}"></label>
     <div class=btns><button class=primary data-act=download>${meta ? 'Refresh' : 'Download'} rules data</button></div>
     <div id=prog></div><p class=muted id=storage></p>
+    <p class=note>Icons by Lorc, Delapouite, Skoll, Carl Olsen, DarkZaitzev, Faithtoken, Sbed and Willdabeast from <a href="https://game-icons.net" target=_blank rel=noopener>game-icons.net</a>,
+      licensed <a href="https://creativecommons.org/licenses/by/3.0/" target=_blank rel=noopener>CC BY 3.0</a> (per-icon credits in icons.svg).</p>
   </section>${D ? '' : characters}`;
 }
 
@@ -365,37 +397,37 @@ function statusView() {
   const conds = list('condition');
   const main = S.R.classes.filter(k => k.cls).sort((a, b) => b.level - a.level)[0], art = main && classArt(main.cls, main.sub);
   return `<section class="card status${art ? ' art' : ''}"${art ? ` style="--art: url('${esc(art)}')"` : ''}>
-    ${shape ? `<div class=shape><span class=grow>🐾 <b>Wild Shape: ${link('creature', shape)}</b> <small class=muted>CR ${esc(shape.cr?.cr ?? shape.cr)} · ${esc(speedText(shape.speed))}</small></span>
+    <div class=namewrap><h2 class=charname>${esc(cur.name)}</h2>${menu(`<button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}<button data-act=addres>+ Resource</button>`)}</div>
+    ${shape ? `<div class=shape><span class=grow>${IC.shape} <b>Wild Shape: ${link('creature', shape)}</b> <small class=muted>CR ${esc(shape.cr?.cr ?? shape.cr)} · ${esc(speedText(shape.speed))}</small></span>
       <button data-act=revert>Revert</button></div>` : ''}
     <div class=hprow>
-      <div class=namewrap><h2 class=charname>${esc(cur.name)}</h2>${menu(`<button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}<button data-act=addres>+ Resource</button>`, 'left')}</div>
-      <div class=hpside><div class=hpbox>${shape ? `<div><span class=big>${cur.shape.hp}</span> / ${cur.shape.max} <small class=muted>${esc(shape.name)} HP · yours ${hp}/${hpMax}</small> ${cur.hp.temp ? `<span class=temp>+${cur.hp.temp} temp</span>` : ''}</div>
+      <div class=hpbox>${shape ? `<div>${IC.hp}<span class=big>${cur.shape.hp}</span> / ${cur.shape.max} <small class=muted>${esc(shape.name)} HP · yours ${hp}/${hpMax}</small> ${cur.hp.temp ? `<span class=temp>${IC.temp}+${cur.hp.temp} temp</span>` : ''}</div>
         <div class="bar beast"><i style="width:${Math.max(0, Math.min(100, (100 * cur.shape.hp) / cur.shape.max))}%"></i></div>`
-        : `<div><span class=big>${hp}</span> / ${bd('hpMax', hpMax)} ${cur.hp.temp ? `<span class=temp>+${cur.hp.temp} temp</span>` : ''}</div>
+        : `<div>${IC.hp}<span class=big>${hp}</span> / ${bd('hpMax', hpMax)} ${cur.hp.temp ? `<span class=temp>${IC.temp}+${cur.hp.temp} temp</span>` : ''}</div>
         <div class=bar><i style="width:${Math.max(0, Math.min(100, (100 * hp) / hpMax))}%"></i></div>`}</div>
       <span class=hpctl role=group aria-label="Change hit points"><input type=number id=hpamt min=0 inputmode=numeric enterkeyhint=done placeholder=HP aria-label="HP amount" title="Type an amount; Enter applies damage">
-        ${[['danger', 'dmg', 'Damage'], ['ok', 'heal', 'Heal'], ['', 'temp', 'Temp']].map(([c, op, l]) => `<button class="${c}" data-act=hp data-op=${op} disabled title="Type an amount first">${l}</button>`).join('')}</span></div>
+        ${[['danger', 'dmg', 'Damage'], ['ok', 'heal', 'Heal'], ['', 'temp', 'Temp']].map(([c, op, l]) => `<button class="${c}" data-act=hp data-op=${op} disabled title="Type an amount first">${l}</button>`).join('')}</span>
     </div>
-    ${hp <= 0 && cur.deathSaves.s < 3 ? `<div class=chips><b>Death saves</b> ✓ ${pips(cur.deathSaves.s, 3, 'ds', 'data-w=s', 'Success', ['marked', 'empty'])} ✗ ${pips(cur.deathSaves.f, 3, 'ds', 'data-w=f', 'Failure', ['marked', 'empty'])}
+    ${hp <= 0 && cur.deathSaves.s < 3 ? `<div class=chips><b>${IC.death} Death saves</b> ✓ ${pips(cur.deathSaves.s, 3, 'ds', 'data-w=s', 'Success', ['marked', 'empty'])} ✗ ${pips(cur.deathSaves.f, 3, 'ds', 'data-w=f', 'Failure', ['marked', 'empty'])}
       <button data-act=deathroll>Roll</button></div>` : ''}
     <div class=vitals>
-      <div>${bd('ac', 'AC')}<b>${st.ac.total}</b></div>
-      <div>${bd('initiative', 'Init')}${r20('initiative', 'Initiative')}</div>
-      <div>${bd('speed', 'Speed')}<b>${st.speed.total}</b></div>
-      <div>${bd('prof', 'Prof')}<b>${signed(st.prof.total)}</b></div>
-      <div><button class=lbl data-act=short title="Spend on a short rest">Hit Dice</button><span class=hd>${Object.entries(S.hitDice).sort((a, b) => b[0] - a[0])
+      <div>${bd('ac', `${IC.ac}AC`)}<b>${st.ac.total}</b></div>
+      <div>${bd('initiative', `${IC.initiative}Init`)}${r20('initiative', 'Initiative')}</div>
+      <div>${bd('speed', `${IC.speed}Speed`)}<b>${st.speed.total}</b></div>
+      <div>${bd('prof', `${IC.profs}Prof`)}<b>${signed(st.prof.total)}</b></div>
+      <div><button class=lbl data-act=short title="Spend on a short rest">${IC.hitDice}Hit Dice</button><span class=hd>${Object.entries(S.hitDice).sort((a, b) => b[0] - a[0])
         .map(([f, n]) => `<b>${n - (cur.hitDiceUsed[f] || 0)}d${f}<small>/${n}</small></b>`).join('') || '<b>—</b>'}</span></div>
     </div>
     <div class=chips>
-      <label class=chip><input type=checkbox data-path=inspiration ${cur.inspiration ? 'checked' : ''}> Inspiration</label>
-      <label class=chip>Exhaustion <select data-path=exhaustion data-type=num>${[0, 1, 2, 3, 4, 5, 6].map(n => opt(n, n, cur.exhaustion === n)).join('')}</select></label>
-      ${cur.concentration ? `<span class="chip conc">◎ ${esc(cur.concentration)} <button class=icon data-act=dropconc title="End concentration">✕</button></span>` : ''}
-      ${cur.conditions.map(n => `<span class="chip on"><a class=ref data-tag=condition data-name="${esc(n)}" data-src=PHB>${esc(n)}</a><button class=icon data-act=cond data-n="${esc(n)}">✕</button></span>`).join('')}
+      <label class=chip><input type=checkbox data-path=inspiration ${cur.inspiration ? 'checked' : ''}> ${IC.inspiration}Inspiration</label>
+      <label class=chip>${IC.exhaustion}Exhaustion <select data-path=exhaustion data-type=num>${[0, 1, 2, 3, 4, 5, 6].map(n => opt(n, n, cur.exhaustion === n)).join('')}</select></label>
+      ${cur.concentration ? `<span class="chip conc">${IC.conc}${esc(cur.concentration)} <button class=icon data-act=dropconc title="End concentration">✕</button></span>` : ''}
+      ${cur.conditions.map(n => `<span class="chip on">${COND_IC[n] || ''}<a class=ref data-tag=condition data-name="${esc(n)}" data-src=PHB>${esc(n)}</a><button class=icon data-act=cond data-n="${esc(n)}">✕</button></span>`).join('')}
       <select data-act=addcond aria-label="Add condition"><option value="">+ Condition</option>${conds.filter(c => c.name !== 'Exhaustion' && !cur.conditions.includes(c.name)).map(c => opt(c.name)).join('')}</select>
     </div>
-    ${toggleSources().length ? `<div class=chips title="Tap to switch an effect on or off"><small class=muted>Active effects</small> ${toggleSources().map(s => togBtn(s)).join('')}</div>` : ''}
+    ${toggleSources().length ? `<div class=chips title="Tap to switch an effect on or off"><small class=muted>${IC.effects}Active effects</small> ${toggleSources().map(s => togBtn(s)).join('')}</div>` : ''}
     ${res ? `<div class=chips>${res}</div>` : ''}
-    <div class=btns><button data-act=short>Short rest</button><button data-act=long>Long rest</button>
+    <div class=btns><button data-act=short>${IC.short}Short rest</button><button data-act=long>${IC.long}Long rest</button>
       ${canShape && !shape ? '<button data-act=wildshape>Wild Shape</button>' : ''}</div>
   </section>`;
 }
@@ -405,18 +437,18 @@ function statsBlocks() {
   const skills = Object.entries(SKILLS).map(([sk, a]) => {
     const s = st[`skill.${sk}`];
     return `<div class=srow><button class="dot p${s.proficient} ${s.derived ? 'g' : ''}" data-act=skillprof data-s="${sk}" title="${esc(s.sources.length ? `From ${s.sources.join(', ')}` : 'Tap: proficient → expertise → none')}"></button>
-      ${bd(`skill.${sk}`, `${cap(sk)} <small class=muted>${a.toUpperCase()}</small>`)}${r20(`skill.${sk}`, cap(sk))}</div>`;
+      ${bd(`skill.${sk}`, `${SKILL_IC[sk]}${cap(sk)} <small class=muted>${a.toUpperCase()}</small>`)}${r20(`skill.${sk}`, cap(sk))}</div>`;
   }).join('');
   const saves = ABIL.map(a => `<div class=srow><button class="dot p${st[`save.${a}`].proficient ? 1 : 0} ${st[`save.${a}`].derived ? 'g' : ''}" data-act=saveprof data-a=${a}></button>
-    ${bd(`save.${a}`, ABIL_NAME[a])}${r20(`save.${a}`, `${ABIL_NAME[a]} save`)}</div>`).join('');
+    ${bd(`save.${a}`, `${ABIL_IC[a]}${ABIL_NAME[a]}`)}${r20(`save.${a}`, `${ABIL_NAME[a]} save`)}</div>`).join('');
   return {
-    abilities: `<section class=card><h3>Abilities</h3><div class=abils>${ABIL.map(a => `<div class=abil>${bd(`ability.${a}`, a.toUpperCase())}
+    abilities: `<section class=card><h3>${IC.abilities}Abilities</h3><div class=abils>${ABIL.map(a => `<div class=abil>${bd(`ability.${a}`, `${ABIL_IC[a]}${a.toUpperCase()}`)}
     ${r20(`check.${a}`, `${ABIL_NAME[a]} check`)}<small>${S.scores[a]}</small></div>`).join('')}</div></section>`,
-    saves: `<section class=card><h3>Saving throws</h3>${profChoiceRows(s => s.kind === 'save')}${saves}</section>`,
-    skills: `<section class=card><h3>Skills</h3>${profChoiceRows(s => s.kind === 'skill' || s.kind === 'expertise')}${skills}
-    <div class=srow>${bd('passive.perception', 'Passive Perception')}<b>${st['passive.perception'].total}</b></div>
-    <div class=srow>${bd('passive.investigation', 'Passive Investigation')}<b>${st['passive.investigation'].total}</b></div>
-    <div class=srow>${bd('passive.insight', 'Passive Insight')}<b>${st['passive.insight'].total}</b></div></section>`,
+    saves: `<section class=card><h3>${IC.saves}Saving throws</h3>${profChoiceRows(s => s.kind === 'save')}${saves}</section>`,
+    skills: `<section class=card><h3>${IC.skills}Skills</h3>${profChoiceRows(s => s.kind === 'skill' || s.kind === 'expertise')}${skills}
+    <div class=srow>${bd('passive.perception', `${SKILL_IC.perception}Passive Perception`)}<b>${st['passive.perception'].total}</b></div>
+    <div class=srow>${bd('passive.investigation', `${SKILL_IC.investigation}Passive Investigation`)}<b>${st['passive.investigation'].total}</b></div>
+    <div class=srow>${bd('passive.insight', `${SKILL_IC.insight}Passive Insight`)}<b>${st['passive.insight'].total}</b></div></section>`,
     profs: profsView(),
   };
 }
@@ -432,9 +464,9 @@ function profsView() {
       return `<span class="chip ${from.length ? 'g' : ''}" title="${esc(from.length ? `From ${from.join(', ')}` : 'Added manually')}">${esc(titleCase(p))}${
         extra.includes(p) ? `<button class=icon data-act=delprof data-k=${kind} data-v="${esc(p)}" aria-label="Remove ${esc(p)}">✕</button>` : ''}</span>`;
     }).join('');
-    return `<div class=profrow><b>${label}</b><div class=chips>${chips || '<small class=muted>none</small>'}</div></div>`;
+    return `<div class=profrow><b>${PROF_IC[kind]}${label}</b><div class=chips>${chips || '<small class=muted>none</small>'}</div></div>`;
   }).join('');
-  return `<section class=card>${sechead('Proficiencies &amp; languages', Object.entries(PROF_KINDS).map(([k, l]) => `<button data-act=pick data-what=prof data-k=${k}>Add ${l === 'Armor' ? 'armor' : l.toLowerCase().replace(/s$/, '')}…</button>`).join(''))}${profChoiceRows(s => PROF_KINDS[s.kind])}${groups}
+  return `<section class=card>${sechead(`${IC.profs}Proficiencies &amp; languages`, Object.entries(PROF_KINDS).map(([k, l]) => `<button data-act=pick data-what=prof data-k=${k}>Add ${l === 'Armor' ? 'armor' : l.toLowerCase().replace(/s$/, '')}…</button>`).join(''))}${profChoiceRows(s => PROF_KINDS[s.kind])}${groups}
     <p class=note>Gold = granted by race, class, background, feats or features (removed with them). Others are manual.</p></section>`;
 }
 
@@ -477,7 +509,7 @@ function abilityUI() {
     return `<tr><th><span class=full>${ABIL_NAME[a]}</span><span class=abbr>${a.toUpperCase()}</span></th><td class=ctl>${ctl(a)}</td><td class=muted>${bonus ? signed(bonus) : ''}</td>
       <td><button class=lbl data-act=bd data-k="ability.${a}">${st.total}</button></td><td><b>${signed(mod(st.total))}</b></td></tr>`;
   }).join('');
-  return `<div class=seg>${Object.entries(METHODS).map(([k, l]) => `<button class="${m === k ? 'on' : ''}" data-act=method data-m=${k}>${l}</button>`).join('')}</div>
+  return `<div class=seg>${Object.entries(METHODS).map(([k, l]) => `<button class="${m === k ? 'on' : ''}" data-act=method data-m=${k}>${METHOD_IC[k]}${l}</button>`).join('')}</div>
     <p class=small>${{
       array: 'Pick a value for each ability. Choosing one already in use swaps the two.',
       pointbuy: `Raise scores from 8 (max 15). <b>${left}</b> of 27 points left.`,
@@ -513,13 +545,13 @@ function setupView() {
   const missing = [!race && 'race', race && !race.ability && subs.length && !sub && 'subrace', !R.background && 'background', !cur.classes.length && 'class',
     R.classes.some(k => k.cls && k.level >= subclassLevel(k.cls) && !k.sub) && 'subclass', picks && `${picks} pick${picks > 1 ? 's' : ''} (dashed boxes)`].filter(Boolean);
   return `<section class="card setup">
-    <div class=setuphead><h2>Character setup</h2><span class=grow></span>
+    <div class=setuphead><h2>${IC.setup}Character setup</h2><span class=grow></span>
       ${missing.length ? `<small class=muted>Still to choose: ${missing.join(', ')}</small>` : ''}
       <button class=primary data-act=setupdone>${missing.length ? 'Done for now' : 'Confirm character'}</button>${menu(`<button data-act=export data-id=${cur.id}>Export JSON</button>`)}</div>
     <div class=setupgrid><div>
       <label class=field><span>Name</span><input data-path=name value="${esc(cur.name)}"></label>
-      <div class=two><label class=field><span>Alignment</span><input data-path=alignment value="${esc(cur.alignment)}"></label>
-        <label class=field><span>XP</span><input type=number data-path=xp value="${cur.xp}"></label></div>
+      <div class=two><label class=field><span>${IC.alignment}Alignment</span><input data-path=alignment value="${esc(cur.alignment)}"></label>
+        <label class=field><span>${IC.xp}XP</span><input type=number data-path=xp value="${cur.xp}"></label></div>
       <div class=field><span>Race</span><div class=inline><button data-act=pick data-what=race>${race ? esc(race.name) : 'Choose…'}</button>${race ? info('race', race) : ''}
         ${subs.length ? `<select data-act=setsubrace>${opt('', '— Subrace —')}${subs.map((s, j) => opt(j, s.name || '(standard)', sub === s)).join('')}</select>` : ''}</div>
         ${race ? `<small class=muted>${esc(abilityText(sub?.overwrite?.ability ? sub : race))}${sub && !sub.overwrite?.ability ? ' · ' + esc(abilityText(sub)) : ''}</small>` : ''}
@@ -579,7 +611,7 @@ function actionsView() {
       ${r.error ? `<p class=warn>${esc(r.error)}</p>` : `<div class=actbtns>
         ${r.hit ? `<span>${bd(`act.${a.id}.hit`, 'Hit')}${r20(`act.${a.id}.hit`, `${r.name} attack`)}</span>` : ''}
         ${r.save ? `<span class=pill>DC ${r.save.dc} ${esc(r.save.ability)}</span>` : ''}
-        ${r.dmg ? `<span>${bd(`act.${a.id}.dmg`, r.dmgType ? esc(r.dmgType) : 'Dmg')}<button class=num data-act=rdmg data-k="act.${id}.dmg" data-label="${esc(r.name)}">${esc(dmgExpr(r.dmg))}</button></span>` : ''}
+        ${r.dmg ? `<span>${bd(`act.${a.id}.dmg`, r.dmgType ? `${DMG_IC[r.dmgType.toLowerCase()] || ''}${esc(r.dmgType)}` : 'Dmg')}<button class=num data-act=rdmg data-k="act.${id}.dmg" data-label="${esc(r.name)}">${esc(dmgExpr(r.dmg))}</button></span>` : ''}
         ${stored && a.kind === 'spell' && r.level ? `<button class=primary data-act=castaction data-i=${i}>Cast <small>(${ORD(r.slot)} slot)</small></button>` : ''}
         ${stored && r.scales ? `<select data-path="actions.${i}.slot" data-type=num aria-label="Slot level">${[1, 2, 3, 4, 5, 6, 7, 8, 9].filter(l => l >= r.level).map(l => opt(l, `${ORD(l)} slot`, l === r.slot)).join('')}</select>` : ''}
         ${!stored && a.slot ? `<select data-path="actionSlots.${a.id}" data-type=num aria-label="Slot level">${Array.from({ length: maxSlot }, (_, l) => opt(l + 1, `${ORD(l + 1)} slot`, l + 1 === a.slot)).join('')}</select>` : ''}
@@ -588,11 +620,11 @@ function actionsView() {
         ${usable ? `<button class="${a.toggleKey && isOn(a.toggleKey) ? 'tog on' : 'primary'}" data-act=useaction data-id="${id}">${useLabel}${res ? ` <small>(${a.use || 1} ${esc(res.name)} · ${Math.max(0, res.max - res.used)} left)</small>` : ''}</button>` : ''}
       </div>`}${r.notes ? `<small class=muted>${esc(r.notes)}</small>` : ''}${[...(r.hit?.notes || []), ...(r.dmg?.notes || [])].map(n => `<small class=note>${esc(n)}</small>`).join('')}</div>`;
   };
-  return `<section class=card>${sechead('Actions', '<button data-act=pick data-what=weaponaction>+ Weapon</button><button data-act=pick data-what=spellaction>+ Spell</button><button data-act=newaction>+ Custom</button>')}
+  return `<section class=card>${sechead(`${IC.actions}Actions`, '<button data-act=pick data-what=weaponaction>+ Weapon</button><button data-act=pick data-what=spellaction>+ Spell</button><button data-act=newaction>+ Custom</button>')}
     ${S.attacks > 1 ? `<p class=small><b>Extra Attack:</b> the Attack action makes <b>${S.attacks}</b> attacks.</p>` : ''}
     ${groups.map(g => {
       const xs = S.actions.filter(r => (r.group || 'action') === g || (g === 'other' && !GROUP[r.group]));
-      return xs.length ? `<h4>${GROUP[g] || 'Other'}</h4>${xs.map(card).join('')}` : '';
+      return xs.length ? `<h4>${GROUP_IC[g] || GROUP_IC.other}${GROUP[g] || 'Other'}</h4>${xs.map(card).join('')}` : '';
     }).join('')}</section>`;
 }
 
@@ -628,8 +660,8 @@ function spellsView() {
       ${def?.toggle ? togBtn({ key: `spell:${s.name}|${s.source}`, name: s.name }, 'Active') : isConc(d) ? `<button class="tog ${cur.concentration === d.name ? 'on' : ''}" data-act=conc ${ns}>Conc.</button>` : ''}
       ${menu(`<button data-act=spellaction ${ns}>Add to actions</button>${bonus ? '' : `<button class=danger data-act=delspell data-i=${i}>Remove</button>`}`, 'sm')}</div>`;
   };
-  return `<section class=card>${sechead('Spellcasting', '<button data-act=pick data-what=spell>+ Add spells</button>')}${sc || '<p class=muted>No spellcasting class.</p>'}${slots}${font}
-    ${Object.keys(byLvl).sort((a, b) => a - b).map(l => `<h4>${l === '0' ? 'Cantrips' : l === '?' ? 'Unknown' : ORD(+l) + ' level'}</h4>${byLvl[l].sort((a, b) => a.s.name.localeCompare(b.s.name)).map(row).join('')}`).join('')}
+  return `<section class=card>${sechead(`${IC.spells}Spellcasting`, '<button data-act=pick data-what=spell>+ Add spells</button>')}${sc || '<p class=muted>No spellcasting class.</p>'}${slots}${font}
+    ${Object.keys(byLvl).sort((a, b) => a - b).map(l => `<h4>${l === '0' ? IC.cantrips + 'Cantrips' : l === '?' ? 'Unknown' : ORD(+l) + ' level'}</h4>${byLvl[l].sort((a, b) => a.s.name.localeCompare(b.s.name)).map(row).join('')}`).join('')}
   </section>`;
 }
 
@@ -660,11 +692,11 @@ function inventoryView() {
         <button class=danger data-act=delitem data-i=${i}>Remove</button></div></details>`;
   };
   const cards = S.R.items.map(card);
-  return `<section class=card>${sechead('Inventory', '<button data-act=pick data-what=item>+ Add item</button><button data-act=customitem>+ Custom item</button>')}
+  return `<section class=card>${sechead(`${IC.inventory}Inventory`, '<button data-act=pick data-what=item>+ Add item</button><button data-act=customitem>+ Custom item</button>')}
     <div class=coins>${['pp', 'gp', 'ep', 'sp', 'cp'].map(k => `<label>${k}<input type=number data-path="currency.${k}" value="${cur.currency[k] || 0}"></label>`).join('')}</div>
     <p class=small>Weight ${S.weight} / ${S.capacity} lb${S.weight > S.capacity ? ' <b class=warn>over capacity</b>' : ''} · Attuned ${att}/3${att > 3 ? ' <b class=warn>too many</b>' : ''}</p>
     ${INV_GROUPS.map(g => [g, cards.filter((_, i) => invGroup(S.R.items[i].data) === g)]).filter(([, xs]) => xs.length)
-      .map(([g, xs]) => `<h4>${g}</h4>${xs.join('')}`).join('') || '<p class=muted>Empty.</p>'}</section>`;
+      .map(([g, xs]) => `<h4>${GROUP_IC[g]}${g}</h4>${xs.join('')}`).join('') || '<p class=muted>Empty.</p>'}</section>`;
 }
 
 function featuresView() {
@@ -679,9 +711,9 @@ function featuresView() {
         ${s.remove ? `<button class=danger data-act=delsource data-k="${esc(s.key)}">Remove</button>` : ''}
         ${s.custom ? `<button class=danger data-act=delcustom data-id="${s.custom.id}">Remove</button>` : ''}</div></details>`;
   };
-  return `<section class=card>${sechead('Features &amp; traits', '<button data-act=pick data-what=feat>+ Feat</button><button data-act=pick data-what=optfeature>+ Class option</button><button data-act=addcustom>+ Custom modifier</button>')}
+  return `<section class=card>${sechead(`${IC.features}Features &amp; traits`, '<button data-act=pick data-what=feat>+ Feat</button><button data-act=pick data-what=optfeature>+ Class option</button><button data-act=addcustom>+ Custom modifier</button>')}
     ${choicesView()}
-    ${Object.entries(groups).map(([g, xs]) => `<h4>${esc(g)}</h4>${xs.map(card).join('')}`).join('') || '<p class=muted>Choose a race and class first.</p>'}
+    ${Object.entries(groups).map(([g, xs]) => `<h4>${GROUP_IC[g] || (g.includes(': ') ? IC.subclass : IC.cls)}${esc(g)}</h4>${xs.map(card).join('')}`).join('') || '<p class=muted>Choose a race and class first.</p>'}
   </section>`;
 }
 
@@ -689,7 +721,7 @@ function featuresView() {
 function choicesView() {
   const gs = S.R.choiceGroups;
   if (!gs.length) return '';
-  return foldChoices('ch:features', `<div class=choices><h4>Choices</h4>${gs.map(g => {
+  return foldChoices('ch:features', `<div class=choices><h4>${IC.choices}Choices</h4>${gs.map(g => {
     const picks = cur.featureChoices[g.key] || [];
     return `<div class=choice><span>${esc(g.label)}: choose ${g.count}</span>${Array.from({ length: g.count }, (_, i) => `<select data-path="featureChoices.${g.key}.${i}" class="${picks[i] ? '' : 'unset'}">
       ${opt('', 'Choose…')}${g.options.map(o => opt(o.value, `${o.label}${picks.includes(o.value) && picks[i] !== o.value ? ' ✓' : ''}`, picks[i] === o.value)).join('')}</select>`).join('')}</div>`;
@@ -707,12 +739,12 @@ function companionsView() {
         <button class=danger data-act=delcomp data-i=${i}>Remove</button></div>
       ${open ? statblock(m) : ''}</details>`;
   }).join('');
-  return `<section class=card>${sechead('Companions', `<button data-act=pick data-what=companion ${list('monster').length ? '' : 'disabled title="Refresh the rules data to download creatures"'}>+ Add creature</button>`)}
+  return `<section class=card>${sechead(`${IC.companions}Companions`, `<button data-act=pick data-what=companion ${list('monster').length ? '' : 'disabled title="Refresh the rules data to download creatures"'}>+ Add creature</button>`)}
     ${cards || '<p class=note>Familiars, animal companions, summons and mounts, with their own HP and attacks. Add one from the ⋮ menu.</p>'}</section>`;
 }
 
 function notesView() {
-  return `<section class=card><h3>Notes</h3>${Object.keys(cur.notes).map(k => `<label class=field><span>${cap(k)}</span>
+  return `<section class=card><h3>${IC.notes}Notes</h3>${Object.keys(cur.notes).map(k => `<label class=field><span>${NOTE_IC[k] || ''}${cap(k)}</span>
     <textarea data-path="notes.${k}" rows=${k === 'backstory' || k === 'other' ? 6 : 2}>${esc(cur.notes[k])}</textarea></label>`).join('')}</section>`;
 }
 
@@ -722,8 +754,8 @@ function renderDice() {
   if (!cur) { bar.innerHTML = last ? `<span class=last>${esc(last.label)}</span>` : ''; return; }
   const n = hist.id === cur.id ? hist.stack.length : 0;
   bar.innerHTML = `<button class=undo data-act=undo ${n ? '' : 'disabled'} title="Undo the last change (up to 3)" aria-label="Undo (${n} available)">↶<span class=undolbl> Undo</span>${n ? ` <small>${n}</small>` : ''}</button>
-    <div class=modes>${[['dis', 'Dis'], ['normal', 'Normal'], ['adv', 'Adv']].map(([m, l]) => `<button class="${ui.mode === m ? 'on' : ''}" data-act=mode data-m=${m}>${l}</button>`).join('')}
-      <button class="${ui.crit ? 'on' : ''}" data-act=crit title="Double damage dice on next damage roll">Crit</button></div>
+    <div class=modes>${[['dis', 'Dis'], ['normal', 'Normal'], ['adv', 'Adv']].map(([m, l]) => `<button class="${ui.mode === m ? 'on' : ''}" data-act=mode data-m=${m}>${IC[m] || ''}${l}</button>`).join('')}
+      <button class="${ui.crit ? 'on' : ''}" data-act=crit title="Double damage dice on next damage roll">${IC.crit}Crit</button></div>
     <button class=last data-act=logtoggle>${last ? `${last.total != null ? `<b class="${last.nat === 20 ? 'nat20' : last.nat === 1 ? 'nat1' : ''}">${last.total}</b> ` : ''}${esc(last.label)} <small>${esc(last.text || '')}</small>` : '<span class=muted>Tap a number to roll</span>'}</button>
     <form class=custom data-act=customroll><input name=expr placeholder="2d6+3" aria-label="Dice expression" enterkeyhint=go><button>Roll</button></form>
     ${ui.showLog ? `<ol class=log>${ui.log.map(l => `<li>${l.total != null ? `<b>${l.total}</b> ` : ''}${esc(l.label)} <small>${esc(l.text || '')}</small></li>`).join('')}</ol>` : ''}`;
@@ -834,7 +866,7 @@ const PICK = {
       for (const h of all) p.counts[GROUP_OF[h.cat]] = (p.counts[GROUP_OF[h.cat]] || 0) + 1;
       return all.filter(h => !p.off.has(GROUP_OF[h.cat]));
     },
-    filters: () => `<div class="inline lkf">${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'} ${ui.pick.counts[g] ? '' : 'none'}" data-act=lookupf data-g="${esc(g)}">${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}
+    filters: () => `<div class="inline lkf">${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'} ${ui.pick.counts[g] ? '' : 'none'}" data-act=lookupf data-g="${esc(g)}">${LOOKUP_IC[g] || ''}${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}
       <button class=tog data-act=lookupf data-g="*">All</button><button class=tog data-act=lookupf data-g="-">None</button></div>
       <small class=note>Filled = searched. Tap a category to switch it on or off.</small>`,
     sub: (x, cat) => `${CAT_LABEL[cat]} · ${cat === 'monster' ? `CR ${x.cr?.cr ?? x.cr ?? '—'} ${creatureType(x)} · ` : cat === 'spell' ? spellLevel(x) + ' · ' : x.className ? x.className + ' · ' : ''}${x.source}`,
@@ -959,7 +991,7 @@ function kitView(bg) {
     return `<select data-act=kittype data-k="${key}" class="${v ? '' : 'unset'}">${opt('', `Choose ${TYPE_LABEL[e.equipmentType]}…`)}${typeItems(e.equipmentType).map(x => opt(`${x.name}|${x.source}`, x.name, v === `${x.name}|${x.source}`)).join('')}</select>`;
   };
   const done = cur.bgKit?.bg === `${bg.name}|${bg.source}`;
-  return `<div class=kit><small class=muted>Starting equipment</small>
+  return `<div class=kit><small class=muted>${IC.kit}Starting equipment</small>
     ${gs.map(g => `<div class=small>${g.lists[0][1].map((e, n) => (e.equipmentType ? sel(e, `t${g.i}._.${n}`) : esc(kitLabel(e)))).join(', ')}
       ${g.opts.length ? `<div class=inline><select data-act=kitopt data-g=${g.i}>${g.opts.map(([k, l]) => opt(k, l.map(kitLabel).join(', '), g.pick === k)).join('')}</select>
         ${g.lists[1][1].map((e, n) => (e.equipmentType ? sel(e, `t${g.i}.${g.pick}.${n}`) : '')).join('')}</div>` : ''}</div>`).join('')}

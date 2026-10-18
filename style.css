@@ -41,6 +41,11 @@ button.icon { background: none; border: none; padding: .2em .4em; min-height: 0;
 input, select, textarea { background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: .3em .45em; min-width: 0; }
 select, input[type=number] { font-family: var(--sans); }
 textarea { width: 100%; resize: vertical; }
+/* game-icons symbols (icons.svg): sized to the text, coloured like it, a little room before the label */
+.ic { width: 1.15em; height: 1.15em; fill: currentColor; vertical-align: -.2em; margin-right: .3em; flex: none; }
+h3 .ic, h2 .ic { width: 1.1em; height: 1.1em; vertical-align: -.15em; }
+.vitals .lbl .ic, .abil .lbl .ic { display: block; margin: 0 auto .1em; width: 1.5em; height: 1.5em; } /* stat boxes: icon above the label */
+.chip .ic { margin-right: .15em; }
 .muted { color: var(--muted); } .small { font-size: .88em; } .warn { color: var(--bad); }
 .note { color: var(--muted); font-size: .85em; display: block; margin: .2em 0; }
 small { font-family: var(--sans); }
@@ -68,10 +73,9 @@ details.card > summary::before { content: '▸ '; color: var(--accent); } detail
 
 /* status */
 /* name on the left; on the right HP over its bar, and below them one joined control [amount | Damage | Heal | Temp] */
-.hprow { display: flex; flex-wrap: wrap; gap: .4em 1.2em; align-items: center; }
+.hprow { display: flex; flex-wrap: wrap; gap: .4em 1.2em; align-items: flex-end; }
 .charname { flex: 0 1 auto; font: 2.7rem/1 Nodesto, var(--head); letter-spacing: .02em; color: var(--accent); margin: 0; overflow-wrap: anywhere; } /* the PHB's title face */
-.hpside { display: flex; flex-direction: column; gap: .35em; margin-left: auto; } /* HP and bar, with the controls below, as wide as each other */
-.hpbox .big { font-size: 2rem; font-weight: bold; }
+.hpbox { flex: 0 1 320px; min-width: 200px; } .hpbox .big { font-size: 2rem; font-weight: bold; }
 .hpctl { display: flex; align-items: stretch; }
 .hpctl > * { border-radius: 0; margin-left: -1px; min-height: 34px; }
 #hpamt { -moz-appearance: textfield; } #hpamt::-webkit-inner-spin-button { -webkit-appearance: none; }
@@ -156,7 +160,7 @@ details.menu > summary:hover, details.menu[open] > summary { background: var(--c
 :is(.blk, .status):has(details.menu[open]) { position: relative; z-index: 7; } /* keep the open menu above the panels (and jump bar) after it */
 details.menu.sm > summary { font-size: 1.05rem; padding: .1em .4em; }
 details.menu.left .menupop { right: auto; left: 0; }
-.namewrap { flex: 1 1 auto; display: flex; align-items: center; gap: .3em; min-width: 0; }
+.namewrap { display: flex; align-items: flex-start; gap: .3em; margin-bottom: .3em; } .namewrap .menu { margin-left: auto; } /* ⋮ in the card's top right corner */
 
 /* actions / spells / inventory / features */
 .act, details.feat { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 3px; padding: .4em .6em; margin: .45em 0; background: var(--field); }
@@ -242,12 +246,12 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
   body { padding-bottom: 70px; }
   .dicebar { flex-wrap: nowrap; gap: .3em; padding-left: 8px; padding-right: 8px; }
   .dicebar .log { position: absolute; bottom: 100%; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); padding: .4em .4em .4em 1.8em; }
-  .dicebar .undolbl, .dicebar .custom button { display: none; }
+  .dicebar .undolbl, .dicebar .custom button, .dicebar .modes .ic { display: none; }
   .dicebar .modes button, .dicebar .undo { padding: .2em .35em; }
   .dicebar .last { flex: 1 1 0; min-width: 0; padding: 0 .2em; }
   .dicebar .last b { font-size: 1.2rem; }
   .dicebar .custom input { width: 4.2em; }
-  .hpside { flex: 1 1 100%; }
+  .hpbox, .hpctl { flex: 1 1 100%; }
   .hpctl > * { flex: 1 1 0; }
   .charname { font-size: 2.2rem; }
 }
@@ -296,7 +300,7 @@ details.fold > summary::before { content: 'View selection…'; } details.fold[op
 .dot.p2.g { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px #c9a24a; }
 
 /* proficiency lists */
-.profrow { display: grid; grid-template-columns: 6.5em 1fr; gap: .4em; align-items: start; padding: .25em 0; border-bottom: 1px dotted var(--line); }
+.profrow { display: grid; grid-template-columns: 8.2em 1fr; gap: .4em; align-items: start; padding: .25em 0; border-bottom: 1px dotted var(--line); }
 .profrow > b { font: 1.05rem var(--head); color: var(--accent); font-weight: normal; padding-top: .35em; }
 .profrow .chips { margin: 0; }
 .profrow select { font-size: .85em; padding: .1em .3em; width: 5.5em; }
