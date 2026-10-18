@@ -146,7 +146,8 @@ await check('items: packs unpack, attunement drives AC, potions become actions, 
   await page.locator('details.item', { hasText: 'Ring of Protection' }).locator('[data-act=attune]').click();
   assert.equal(+(await vit('AC')), ac0 + 1);
   await addItem('potion of healing', /^Potion of Healing/);
-  await page.locator('details.item', { hasText: 'Potion of Healing' }).locator('[data-act=itemaction]').click();
+  await page.locator('details.item', { hasText: 'Potion of Healing' }).locator('summary').click(); // + Action sits in the expanded item
+  await page.locator('details.item[open]', { hasText: 'Potion of Healing' }).locator('[data-act=itemaction]').click();
   assert.match(await act('Potion of Healing').innerText(), /2d4\+2/);
   await addItem('plate armor', /^Plate Armor/);
   await page.locator('details.item', { hasText: 'Plate Armor' }).locator('[data-act=equip]').click();
@@ -156,7 +157,8 @@ await check('items: packs unpack, attunement drives AC, potions become actions, 
 await check('magic variants: +1 Longsword is a proper weapon with its bonus', async () => {
   await page.locator('[data-act=pick][data-what=item]').click(); await pick('+1 weapon', /^\+1 Weapon/); await pick('longsword', /^Longsword/);
   await page.keyboard.press('Escape');
-  await page.locator('details.item', { hasText: '+1 Longsword' }).locator('[data-act=itemaction]').click();
+  await page.locator('details.item', { hasText: '+1 Longsword' }).locator('summary').click(); // + Action sits in the expanded item
+  await page.locator('details.item[open]', { hasText: '+1 Longsword' }).locator('[data-act=itemaction]').click();
   assert.match(await act('+1 Longsword').innerText(), /1d8\+\d/);
 });
 
@@ -257,6 +259,7 @@ await check('fighter: extra attack, maneuver DC, great weapon fighting note', as
   assert.match(await act('Greatsword').innerText(), /Great Weapon Fighting/);
   const fist = () => act('Unarmed Strike').locator('[data-act=rdmg]');
   assert.match(await fist().innerText(), /^\d+$/, 'plain unarmed strike is 1 + STR');
+  await page.locator('[data-blk=features] details.fold > summary').click(); // all picks made: folded behind "View selection…"
   await page.locator('select[data-path="featureChoices.of:Fighter:cls:Fighting Style.0"]').selectOption({ label: 'Unarmed Fighting' });
   await act('Unarmed Strike').locator('[data-act=rdmg]', { hasText: /^1d6\+\d$/ }).waitFor(); // greatsword equipped: d6
   await page.locator('details.item', { hasText: 'Greatsword' }).locator('[data-act=equip]').click();

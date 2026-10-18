@@ -237,6 +237,9 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
 /* proficiency choices + granted marker */
 .choice { display: flex; flex-wrap: wrap; align-items: center; gap: .3em; margin: .25em 0; font-size: .92em; }
 .choice > span { flex-basis: 100%; color: var(--muted); font-family: var(--sans); }
+details.fold > summary { cursor: pointer; list-style: none; color: var(--accent); font: .92em var(--sans); margin: .2em 0; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: 'View selection…'; } details.fold[open] > summary::before { content: 'Hide'; }
 .choice select.unset { border: 1px dashed var(--accent); color: var(--accent); }
 .dot.g { box-shadow: 0 0 0 2px var(--card), 0 0 0 3px #c9a24a; }
 .dot.p2.g { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px #c9a24a; }

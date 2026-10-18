@@ -501,8 +501,13 @@ function setupView() {
 }
 
 // selects for every proficiency choice a source offers; picks live in cur.profChoices[source.key]
+// once every pick in a block is made, it folds behind "View selection…"
+const foldChoices = (key, html, done) => (!html || !done ? html : `<details class=fold data-key="${esc(key)}" ${ui.open.has(key) ? 'open' : ''}><summary></summary>${html}</details>`);
+const allPicked = (picks, n) => Array.from({ length: n }, (_, i) => picks?.[i]).every(Boolean);
+
 function profChoiceRows(filter) {
-  return profSources(S.R).filter(s => s.count && filter(s)).map(s => {
+  const srcs = profSources(S.R).filter(s => s.count && filter(s));
+  return foldChoices(`ch:${srcs.map(s => s.key).join()}`, srcs.map(s => {
     const picks = cur.profChoices[s.key] || [];
     const from = s.from || Object.keys(SKILLS).filter(k => S.stats[`skill.${k}`].proficient >= 1); // expertise: any proficient skill
     const label = x => (s.kind === 'save' ? ABIL_NAME[x] : titleCase(x));
@@ -511,7 +516,7 @@ function profChoiceRows(filter) {
     const what = { expertise: 'expertise', save: 'saving throw', skill: 'skill', lang: 'language', tool: 'tool', weapon: 'weapon', armor: 'armor' }[s.kind] + (s.count > 1 && s.kind !== 'armor' ? 's' : '');
     return `<div class=choice><span>${esc(s.label)}: choose ${s.count} ${what}</span>${Array.from({ length: s.count }, (_, i) => `<select data-path="profChoices.${s.key}.${i}" class="${picks[i] ? '' : 'unset'}">
       ${opt('', 'Choose…')}${from.map(x => opt(x, `${label(x)}${has(x) && picks[i] !== x ? ' ✓' : ''}`, picks[i] === x)).join('')}</select>`).join('')}</div>`;
-  }).join('');
+  }).join(''), srcs.every(s => allPicked(cur.profChoices[s.key], s.count)));
 }
 
 function levelChooser() {
@@ -599,6 +604,8 @@ function spellsView() {
 const isWeapon = d => d.weapon || ['M', 'R'].includes(code(d.type)) || !!d.dmg1;
 const FX_LABEL = { ac: 'AC', 'save.all': 'saves', spellAttack: 'spell attack', spellDc: 'spell DC', 'check.all': 'checks' };
 const fxSummary = list => (list || []).map(e => `${FX_LABEL[e.target] || e.target} ${e.op === 'min' ? '≥' + e.value : e.op === 'add' && typeof e.value === 'number' ? signed(e.value) : e.op}`).join(', ');
+const INV_GROUPS = ['Weapons', 'Armor', 'Magic items', 'Gear'];
+const invGroup = d => (isWeapon(d) ? 'Weapons' : ['LA', 'MA', 'HA', 'S'].includes(code(d.type)) ? 'Armor' : d.wondrous || (d.rarity && d.rarity !== 'none') ? 'Magic items' : 'Gear');
 function inventoryView() {
   const att = cur.inventory.filter(i => i.attuned).length;
   const card = ({ inv, data }, i) => {
@@ -611,19 +618,22 @@ function inventoryView() {
         ${fx ? `<span class=badge title="${esc(active ? 'Active' : 'Inactive until ' + (data.reqAttune ? 'attuned' : 'equipped'))}">${esc(fx)}</span>` : ''}
         ${equippable ? `<button class="tog ${inv.equipped ? 'on' : ''}" data-act=equip data-i=${i}>${inv.equipped ? 'Equipped' : 'Equip'}</button>` : ''}
         ${data.reqAttune ? `<button class="tog ${inv.attuned ? 'on' : ''}" data-act=attune data-i=${i}>${inv.attuned ? 'Attuned' : 'Attune'}</button>` : ''}
-        <button class="tog ${hasAction ? 'on' : ''}" data-act=itemaction data-i=${i} title="Add to actions">${hasAction ? 'In actions' : '+ Action'}</button></summary>
+</summary>
       ${open ? `<div class=entries>${inv.custom ? '' : `<div class=meta>${itemLine(data)}</div>`}${entries(data.entries)}</div>` : ''}
       <div class=btns><label class=small>Qty <input type=number class=qty min=0 data-path="inventory.${i}.qty" value="${inv.qty ?? 1}"></label>
         ${inv.custom ? `<input data-path="inventory.${i}.name" value="${esc(inv.name)}" aria-label="Item name">
           <label class=small>lb <input type=number class=qty data-path="inventory.${i}.weight" value="${inv.weight || 0}"></label>
           <input data-path="inventory.${i}.notes" value="${esc(inv.notes || '')}" placeholder=Notes aria-label=Notes>` : ''}
+        <button class="tog ${hasAction ? 'on' : ''}" data-act=itemaction data-i=${i} title="Add to actions">${hasAction ? 'In actions' : '+ Action'}</button>
         <button class=danger data-act=delitem data-i=${i}>Remove</button></div></details>`;
   };
+  const cards = S.R.items.map(card);
   return `<section class=card><h3>Inventory</h3>
     <div class=coins>${['pp', 'gp', 'ep', 'sp', 'cp'].map(k => `<label>${k}<input type=number data-path="currency.${k}" value="${cur.currency[k] || 0}"></label>`).join('')}</div>
     <p class=small>Weight ${S.weight} / ${S.capacity} lb${S.weight > S.capacity ? ' <b class=warn>over capacity</b>' : ''} · Attuned ${att}/3${att > 3 ? ' <b class=warn>too many</b>' : ''}</p>
     <div class=btns><button data-act=pick data-what=item>+ Add item</button><button data-act=customitem>+ Custom item</button></div>
-    ${S.R.items.map(card).join('') || '<p class=muted>Empty.</p>'}</section>`;
+    ${INV_GROUPS.map(g => [g, cards.filter((_, i) => invGroup(S.R.items[i].data) === g)]).filter(([, xs]) => xs.length)
+      .map(([g, xs]) => `<h4>${g}</h4>${xs.join('')}`).join('') || '<p class=muted>Empty.</p>'}</section>`;
 }
 
 function featuresView() {
@@ -649,11 +659,11 @@ function featuresView() {
 function choicesView() {
   const gs = S.R.choiceGroups;
   if (!gs.length) return '';
-  return `<div class=choices><h4>Choices</h4>${gs.map(g => {
+  return foldChoices('ch:features', `<div class=choices><h4>Choices</h4>${gs.map(g => {
     const picks = cur.featureChoices[g.key] || [];
     return `<div class=choice><span>${esc(g.label)}: choose ${g.count}</span>${Array.from({ length: g.count }, (_, i) => `<select data-path="featureChoices.${g.key}.${i}" class="${picks[i] ? '' : 'unset'}">
       ${opt('', 'Choose…')}${g.options.map(o => opt(o.value, `${o.label}${picks.includes(o.value) && picks[i] !== o.value ? ' ✓' : ''}`, picks[i] === o.value)).join('')}</select>`).join('')}</div>`;
-  }).join('')}</div>`;
+  }).join('')}</div>`, gs.every(g => allPicked(cur.featureChoices[g.key], g.count)));
 }
 
 function companionsView() {
