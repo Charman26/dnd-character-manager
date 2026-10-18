@@ -126,7 +126,7 @@ details.card > summary::before { content: '▸ '; color: var(--accent); } detail
 /* class art behind the top panel (url set inline from the rules data), faded towards the text on the left */
 .status { position: relative; isolation: isolate; }
 .status.art::before { content: ''; position: absolute; inset: 0 0 0 auto; width: min(50%, 560px); z-index: -1; border-radius: inherit; pointer-events: none;
-  opacity: .35; background: var(--art) center 20% / cover no-repeat;
+  opacity: .28; background: var(--art) center 20% / cover no-repeat;
   -webkit-mask-image: linear-gradient(to right, transparent, #000 60%); mask-image: linear-gradient(to right, transparent, #000 60%); }
 @media (max-width: 600px) { .status.art::before { width: 85%; } }
 @container (min-width: 560px) { .abils { grid-template-columns: repeat(6, 1fr); } }
