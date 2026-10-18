@@ -136,6 +136,7 @@ export function search(q, cats = Object.keys(CAT_LABEL)) {
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean), whole = words.join(' '), hits = [];
   const starts = words.map(w => new RegExp(`\\b${w.replace(/\W/g, '\\$&')}`));
   for (const cat of cats) for (const x of list(cat)) {
+    if (!x.name) continue; // unnamed "standard" subraces: nothing to show
     const n = x.name.toLowerCase();
     if (!words.every(w => n.includes(w))) continue;
     hits.push({ cat, x, score: !whole ? 0 : n === whole ? 0 : n.startsWith(whole) ? 1 : starts.every(r => r.test(n)) ? 2 : 3 });

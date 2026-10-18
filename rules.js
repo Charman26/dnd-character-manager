@@ -301,7 +301,30 @@ export function profSources(R) {
     const lang = FEATURE_LANGS[s.name.toLowerCase()];
     if (lang) out.push({ key: `lang:${s.key}`, src: s.key, label: s.name, kind: 'lang', fixed: [lang], from: [], count: 0 });
   }
+  // class/subclass features grant armor, weapons and tools only in prose ("you gain proficiency with heavy armor")
+  for (const s of R.sources || []) {
+    if (!/^[cs]f:/.test(s.key)) continue;
+    const g = featureProfs(s.data?.entries, R), label = s.group?.split(': ').at(-1) || s.name;
+    for (const kind of ['armor', 'weapon', 'tool']) if (g[kind].length) out.push({ key: `${kind}:${s.key}`, src: s.key, label, kind, fixed: g[kind], from: [], count: 0 });
+  }
   return out;
+}
+// ponytail: prose parsing, misses grants worded differently; picks "of your choice" are left to manual adds
+export function featureProfs(ent, R) {
+  const g = { armor: [], weapon: [], tool: [] }, txt = JSON.stringify(ent || '');
+  for (const [, clause] of txt.matchAll(/(?:gain|have) proficiency with (.+?)(?=\.|"|$)/gi)) {
+    for (const part of clause.split(/,\s*(?:and\s+)?|\s+and\s+/)) {
+      if (/choice|one type|other type/i.test(part)) continue;
+      for (const [, a] of part.matchAll(/\b(light|medium|heavy) armor/gi)) g.armor.push(a.toLowerCase());
+      if (/\bshields?\b/i.test(part)) g.armor.push('shield');
+      for (const [, w] of part.matchAll(/\b(simple|martial) weapons/gi)) g.weapon.push(w.toLowerCase());
+      for (const [, n] of part.matchAll(/\{@item ([^|}]+)/g)) {
+        const k = n.toLowerCase();
+        if (L.tool.includes(k)) g.tool.push(k); else if (R.weaponNames?.all?.includes(k)) g.weapon.push(k);
+      }
+    }
+  }
+  return g;
 }
 // -> {skill|save|expertise|armor|weapon|tool|lang: {name: [source labels]}}; manual extras labelled "manual"
 export function profGrants(c, R) {

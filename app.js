@@ -28,6 +28,13 @@ const WHEN = 'armor noArmor shield noShield notHeavyArmor lightOrNoArmor nonProf
 
 let chars = [], cur = null, S = null, saveT;
 const ui = { plan: null, mode: 'normal', crit: false, log: [], showLog: false, dlg: null, pick: null, edit: null, open: new Set(), info: [] };
+// undo: the last 3 saved states of the open character (JSON), base = the state as saved now
+const hist = { id: null, base: null, stack: [] };
+function snap() {
+  const s = JSON.stringify(cur);
+  if (hist.id !== cur.id) Object.assign(hist, { id: cur.id, base: s, stack: [] });
+  else if (s !== hist.base) { hist.stack.push(hist.base); if (hist.stack.length > 3) hist.stack.shift(); hist.base = s; }
+}
 
 const newChar = () => ({
   id: uid(), name: 'New hero', race: null, subrace: null, background: null, alignment: '', xp: 0, classes: [],
@@ -57,6 +64,7 @@ function migrateProfs() {
 
 function save() {
   if (!cur) return;
+  snap();
   clearTimeout(saveT);
   const c = cur;
   saveT = setTimeout(() => db.put('characters', structuredClone(c)).catch(e => toast(`Save failed: ${e.message}`)), 250);
@@ -234,9 +242,14 @@ const opt = (v, label, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : '
 const bd = (k, label) => `<button class=lbl data-act=bd data-k="${esc(k)}">${label}</button>`;
 const marks = s => `${s.adv.length ? '<i class=adv title="Advantage">A</i>' : ''}${s.dis.length ? '<i class=dis title="Disadvantage">D</i>' : ''}`;
 const r20 = (k, label, s = S.stats[k]) => `<button class=num data-act=r20 data-k="${esc(k)}" data-label="${esc(label)}">${signed(s.total)}${s.dice.map(d => `<small>+${d}</small>`).join('')}</button>${marks(s)}`;
-const pips = (left, max, act, attrs = '') => Array.from({ length: max }, (_, i) => `<button class="pip ${i < left ? 'on' : ''}" data-act=${act} data-i=${i} ${attrs}></button>`).join('');
+// filled = still available; tapping spends or restores
+const pips = (left, max, act, attrs = '', label = '', [on, off] = ['available', 'spent']) => Array.from({ length: max }, (_, i) => `<button class="pip ${i < left ? 'on' : ''}" data-act=${act} data-i=${i} ${attrs}
+  aria-label="${esc(label)} ${i + 1} of ${max}, ${i < left ? on : off}" title="${i < left ? cap(on) : cap(off)}: tap to change"></button>`).join('');
 const link = (tag, x) => (x ? `<a class=ref data-tag=${tag} data-name="${esc(x.name)}" data-src="${esc(x.source || '')}">${esc(x.name)}</a>` : '');
 const info = (tag, x) => `<a class="ref icon" data-tag=${tag} data-name="${esc(x.name)}" data-src="${esc(x.source || '')}" title=Details>ⓘ</a>`;
+// section heading with a ⋮ menu holding its less frequent "+ …" buttons (closed by the click handler below)
+const menu = (items, cls = '') => `<details class="menu ${cls}"><summary title="More" aria-label="More options">⋮</summary><div class=menupop>${items}</div></details>`;
+const sechead = (title, items) => `<div class=sechead><h3>${title}</h3>${menu(items)}</div>`;
 const summary = c => [c.race?.name, c.classes.map(k => `${k.name} ${k.level}`).join(' / ')].filter(Boolean).join(' · ');
 
 function withFocus(fn) {
@@ -256,11 +269,16 @@ function render() {
   withFocus(() => {
     if (cur && D && cur.profV !== 2) migrateProfs();
     if (cur && D) S = compute();
+    if (cur && hist.id !== cur.id) snap();
     $('#app').innerHTML = cur && D ? sheetView() : homeView();
-    $('#title').textContent = cur ? cur.name : 'D&D 5e Characters';
+    $('#title').textContent = cur ? '' : 'D&D 5e Characters';
+    $('[data-act=home]').hidden = !cur;
+    document.title = cur ? `${cur.name} · D&D Character Manager` : 'D&D Character Manager';
     if (ui.dlg) $('#dlgBody').innerHTML = ui.dlg();
     layout();
   });
+  syncJump();
+  if (ui.focusName) { ui.focusName = false; $('[data-path=name]')?.select(); }
   renderDice();
   if (!cur) navigator.storage?.estimate?.().then(e => { const el = $('#storage'); if (el) el.textContent = `Storage used: ${(e.usage / 1e6).toFixed(1)} MB`; });
 }
@@ -268,14 +286,14 @@ const renderDlg = () => withFocus(() => { if (ui.dlg) $('#dlgBody').innerHTML = 
 
 function homeView() {
   const meta = D?.raw.meta;
-  return `<section class=card><h2>Characters</h2>
-    ${chars.map(c => `<div class=row><a href="#${c.id}" class=grow><b>${esc(c.name)}</b><br><small class=muted>${esc(summary(c))}</small></a>
-      <button data-act=dup data-id=${c.id}>Copy</button><button data-act=export data-id=${c.id}>Export</button><button class=danger data-act=delchar data-id=${c.id}>Delete</button></div>`).join('') || '<p class=muted>No characters yet.</p>'}
+  const characters = `<section class=card><h2>Characters</h2>
+    ${chars.map(c => `<div class=row><a href="#${c.id}" class="grow open"><span><b>${esc(c.name)}</b><br><small class=muted>${esc(summary(c))}</small></span><span class=chev aria-hidden=true>›</span></a>
+      ${menu(`<button data-act=dup data-id=${c.id}>Duplicate</button><button data-act=export data-id=${c.id}>Export JSON</button><button class=danger data-act=delchar data-id=${c.id}>Delete…</button>`)}</div>`).join('') || '<p class=muted>No characters yet.</p>'}
     <div class=btns><button class=primary data-act=newchar ${D ? '' : 'disabled'}>New character</button><button data-act=loadexamples ${D ? '' : 'disabled'}>Load example characters</button>
       <label class=btn>Import JSON<input type=file accept=".json,application/json" data-act=import hidden></label></div>
-    ${cur && !D ? '<p class=warn>Download the rules data to open characters.</p>' : ''}
-  </section>
-  <section class=card><h2>Rules data</h2>
+    ${D ? '' : `<p class=warn>${cur ? 'Download the rules data to open characters.' : 'Download the rules data above first: creating or loading characters needs it.'}</p>`}
+  </section>`;
+  return `${D ? characters : ''}<section class=card><h2>Rules data</h2>
     ${meta ? `<p>Downloaded ${new Date(meta.date).toLocaleString()}: ${meta.counts.spell} spells, ${meta.counts.class} classes, ${meta.counts.subclass} subclasses,
       ${meta.counts.item + meta.counts.baseitem} items, ${meta.counts.feat} feats, ${meta.counts.race} races.</p>`
     : '<p><b>No rules data yet.</b> Download it once while online. It is stored in this browser and works offline afterwards.</p>'}
@@ -283,7 +301,7 @@ function homeView() {
     <label class=field><span>Data repository</span><input id=base type=url placeholder="https://github.com/owner/repo" value="${esc(meta?.src || meta?.base || '')}"></label>
     <div class=btns><button class=primary data-act=download>${meta ? 'Refresh' : 'Download'} rules data</button></div>
     <div id=prog></div><p class=muted id=storage></p>
-  </section>`;
+  </section>${D ? '' : characters}`;
 }
 
 // Blocks in priority order. Each goes into the currently shortest column, so the core blocks
@@ -314,6 +332,18 @@ function layout() {
   }
   ui.plan = { n: cols.length, id: cur.id, cols: plan };
 }
+// single column: highlight the section under the jump bar and keep its button in view
+function syncJump() {
+  const nav = $('.jump');
+  if (!nav) return;
+  const y = Math.max(nav.getBoundingClientRect().bottom + 8, innerHeight / 3), bs = [...nav.children];
+  const on = bs.filter(b => document.querySelector(`[data-blk=${b.dataset.b}]`)?.getBoundingClientRect().top <= y).at(-1) || bs[0];
+  bs.forEach(b => b.classList.toggle('on', b === on));
+  if (nav.dataset.on === on.dataset.b) return;
+  nav.scrollTo({ left: on.offsetLeft - nav.clientWidth / 3, behavior: nav.dataset.on ? 'smooth' : 'instant' }); // fresh after a render: no animation
+  nav.dataset.on = on.dataset.b;
+}
+addEventListener('scroll', () => requestAnimationFrame(syncJump), { passive: true });
 
 function toggleSources() {
   const out = S.R.sources.filter(s => sourceDef(cur, s, P)?.toggle);
@@ -327,9 +357,9 @@ function statusView() {
   const { hp, hpMax } = S, st = S.stats;
   const res = S.resources.map(r => {
     const left = Math.max(0, r.max - r.used), id = esc(r.id);
-    return `<span class=res><b>${esc(r.name)}</b> ${r.max <= 12 ? pips(left, r.max, 'respip', `data-id="${id}"`) : `<button data-act=resstep data-id="${id}" data-d=1>−</button> ${left}/${r.max} <button data-act=resstep data-id="${id}" data-d=-1>+</button>`}
-      ${r.die ? `<button class=roll data-roll="${esc(r.die)}">${esc(r.die)}</button>` : ''}<small class=muted>${r.reset}</small>
-      ${r.id.startsWith('f:') ? '' : `<button class=icon data-act=editres data-id="${id}" title="Edit">✎</button>`}</span>`;
+    return `<span class=res><b>${esc(r.name)}</b> ${r.max <= 12 ? pips(left, r.max, 'respip', `data-id="${id}"`, r.name) : `<button data-act=resstep data-id="${id}" data-d=1 aria-label="Spend one">−</button> ${left}/${r.max} <button data-act=resstep data-id="${id}" data-d=-1 aria-label="Restore one">+</button>`}
+      ${r.die ? `<button class=roll data-roll="${esc(r.die)}">${esc(r.die)}</button>` : ''}${r.reset === 'never' ? '' : `<small class=muted title="Resets on a ${esc(r.reset)} rest">↻ ${esc(r.reset)} rest</small>`}
+      ${r.id.startsWith('f:') ? '' : menu(`<button data-act=editres data-id="${id}">Edit…</button><button class=danger data-act=delres data-r=${cur.resources.findIndex(x => x.id === r.id)}>Delete</button>`, 'sm left')}</span>`;
   }).join('');
   const shape = S.R.shape, canShape = S.featureRes.some(r => r.name === 'Wild Shape');
   const conds = list('condition');
@@ -338,14 +368,15 @@ function statusView() {
     ${shape ? `<div class=shape><span class=grow>🐾 <b>Wild Shape: ${link('creature', shape)}</b> <small class=muted>CR ${esc(shape.cr?.cr ?? shape.cr)} · ${esc(speedText(shape.speed))}</small></span>
       <button data-act=revert>Revert</button></div>` : ''}
     <div class=hprow>
-      <div class=hpbox>${shape ? `<div><span class=big>${cur.shape.hp}</span> / ${cur.shape.max} <small class=muted>${esc(shape.name)} HP · yours ${hp}/${hpMax}</small> ${cur.hp.temp ? `<span class=temp>+${cur.hp.temp} temp</span>` : ''}</div>
+      <div class=namewrap><h2 class=charname>${esc(cur.name)}</h2>${menu(`<button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}<button data-act=addres>+ Resource</button>`, 'left')}</div>
+      <div class=hpside><div class=hpbox>${shape ? `<div><span class=big>${cur.shape.hp}</span> / ${cur.shape.max} <small class=muted>${esc(shape.name)} HP · yours ${hp}/${hpMax}</small> ${cur.hp.temp ? `<span class=temp>+${cur.hp.temp} temp</span>` : ''}</div>
         <div class="bar beast"><i style="width:${Math.max(0, Math.min(100, (100 * cur.shape.hp) / cur.shape.max))}%"></i></div>`
         : `<div><span class=big>${hp}</span> / ${bd('hpMax', hpMax)} ${cur.hp.temp ? `<span class=temp>+${cur.hp.temp} temp</span>` : ''}</div>
         <div class=bar><i style="width:${Math.max(0, Math.min(100, (100 * hp) / hpMax))}%"></i></div>`}</div>
-      <input type=number id=hpamt min=0 inputmode=numeric placeholder=HP aria-label="HP amount">
-      <button class=danger data-act=hp data-op=dmg>Damage</button><button class=ok data-act=hp data-op=heal>Heal</button><button data-act=hp data-op=temp>Temp</button>
+      <span class=hpctl role=group aria-label="Change hit points"><input type=number id=hpamt min=0 inputmode=numeric enterkeyhint=done placeholder=HP aria-label="HP amount" title="Type an amount; Enter applies damage">
+        ${[['danger', 'dmg', 'Damage'], ['ok', 'heal', 'Heal'], ['', 'temp', 'Temp']].map(([c, op, l]) => `<button class="${c}" data-act=hp data-op=${op} disabled title="Type an amount first">${l}</button>`).join('')}</span></div>
     </div>
-    ${hp <= 0 ? `<div class=chips><b>Death saves</b> ✓ ${pips(cur.deathSaves.s, 3, 'ds', 'data-w=s')} ✗ ${pips(cur.deathSaves.f, 3, 'ds', 'data-w=f')}
+    ${hp <= 0 && cur.deathSaves.s < 3 ? `<div class=chips><b>Death saves</b> ✓ ${pips(cur.deathSaves.s, 3, 'ds', 'data-w=s', 'Success', ['marked', 'empty'])} ✗ ${pips(cur.deathSaves.f, 3, 'ds', 'data-w=f', 'Failure', ['marked', 'empty'])}
       <button data-act=deathroll>Roll</button></div>` : ''}
     <div class=vitals>
       <div>${bd('ac', 'AC')}<b>${st.ac.total}</b></div>
@@ -360,13 +391,12 @@ function statusView() {
       <label class=chip>Exhaustion <select data-path=exhaustion data-type=num>${[0, 1, 2, 3, 4, 5, 6].map(n => opt(n, n, cur.exhaustion === n)).join('')}</select></label>
       ${cur.concentration ? `<span class="chip conc">◎ ${esc(cur.concentration)} <button class=icon data-act=dropconc title="End concentration">✕</button></span>` : ''}
       ${cur.conditions.map(n => `<span class="chip on"><a class=ref data-tag=condition data-name="${esc(n)}" data-src=PHB>${esc(n)}</a><button class=icon data-act=cond data-n="${esc(n)}">✕</button></span>`).join('')}
-      <select data-act=addcond aria-label="Add condition"><option value="">+ Condition</option>${conds.filter(c => !cur.conditions.includes(c.name)).map(c => opt(c.name)).join('')}</select>
+      <select data-act=addcond aria-label="Add condition"><option value="">+ Condition</option>${conds.filter(c => c.name !== 'Exhaustion' && !cur.conditions.includes(c.name)).map(c => opt(c.name)).join('')}</select>
     </div>
-    ${toggleSources().length ? `<div class=chips><small class=muted>Toggles</small> ${toggleSources().map(s => togBtn(s)).join('')}</div>` : ''}
+    ${toggleSources().length ? `<div class=chips title="Tap to switch an effect on or off"><small class=muted>Active effects</small> ${toggleSources().map(s => togBtn(s)).join('')}</div>` : ''}
     ${res ? `<div class=chips>${res}</div>` : ''}
-    <div class=btns><button data-act=short>Short rest</button><button data-act=long>Long rest</button><button data-act=addres>+ Resource</button>
-      ${canShape && !shape ? '<button data-act=wildshape>Wild Shape</button>' : ''}
-      <button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}</div>
+    <div class=btns><button data-act=short>Short rest</button><button data-act=long>Long rest</button>
+      ${canShape && !shape ? '<button data-act=wildshape>Wild Shape</button>' : ''}</div>
   </section>`;
 }
 
@@ -402,10 +432,9 @@ function profsView() {
       return `<span class="chip ${from.length ? 'g' : ''}" title="${esc(from.length ? `From ${from.join(', ')}` : 'Added manually')}">${esc(titleCase(p))}${
         extra.includes(p) ? `<button class=icon data-act=delprof data-k=${kind} data-v="${esc(p)}" aria-label="Remove ${esc(p)}">✕</button>` : ''}</span>`;
     }).join('');
-    return `<div class=profrow><b>${label}</b><div class=chips>${chips || '<small class=muted>none</small>'}
-      <select data-act=addprof data-k=${kind} aria-label="Add ${label.toLowerCase()}">${opt('', '+ add')}${profSuggest(kind).filter(p => !have[p]).map(p => opt(p, titleCase(p))).join('')}</select></div></div>`;
+    return `<div class=profrow><b>${label}</b><div class=chips>${chips || '<small class=muted>none</small>'}</div></div>`;
   }).join('');
-  return `<section class=card><h3>Proficiencies &amp; languages</h3>${profChoiceRows(s => PROF_KINDS[s.kind])}${groups}
+  return `<section class=card>${sechead('Proficiencies &amp; languages', Object.entries(PROF_KINDS).map(([k, l]) => `<button data-act=pick data-what=prof data-k=${k}>Add ${l === 'Armor' ? 'armor' : l.toLowerCase().replace(/s$/, '')}…</button>`).join(''))}${profChoiceRows(s => PROF_KINDS[s.kind])}${groups}
     <p class=note>Gold = granted by race, class, background, feats or features (removed with them). Others are manual.</p></section>`;
 }
 
@@ -414,7 +443,7 @@ function abilityChoiceUI(key, data) {
   const spec = abilityChoiceSpec(data);
   if (!spec) return '';
   const ch = cur.abilityChoices[key] || [];
-  return `<div class=field><span>${esc(data.name || 'Subrace')} bonus</span><div class=inline>${spec.weights.map((w, i) => `<select data-path="abilityChoices.${key}.${i}">
+  return `<div class=field><span>${esc(data.name || 'Subrace')} bonus</span><div class="inline choice">${spec.weights.map((w, i) => `<select data-path="abilityChoices.${key}.${i}" class="${ch[i] ? '' : 'unset'}">
     ${opt('', `${signed(w)} to…`)}${spec.from.map(a => opt(a, a.toUpperCase(), ch[i] === a)).join('')}</select>`).join('')}</div></div>`;
 }
 const STD_ARRAY = [15, 14, 13, 12, 10, 8];
@@ -477,11 +506,16 @@ function setupView() {
         ${k.sub ? info('subclass', k.sub) : ''}`
         : `<small class=muted>${esc(k.cls.subclassTitle || 'Subclass')} at level ${sl}</small>`}</div>`;
   }).join('');
-  const missing = [!race && 'race', race && !race.ability && subs.length && !sub && 'subrace', !R.background && 'background', !cur.classes.length && 'class'].filter(Boolean);
+  // open selects: proficiency picks of race/background/class, and the race's "+1 to…" ability picks
+  const unpicked = (picks, n) => Array.from({ length: n }, (_, i) => picks?.[i]).filter(x => !x).length;
+  const picks = srcs.filter(s => s.count && /^(race|subrace|background|class|mc:)/.test(s.src)).reduce((n, s) => n + unpicked(cur.profChoices[s.key], s.count), 0)
+    + [['race', sub?.overwrite?.ability ? null : race], ['subrace', sub]].reduce((n, [k, x]) => n + unpicked(cur.abilityChoices[k], abilityChoiceSpec(x)?.weights.length || 0), 0);
+  const missing = [!race && 'race', race && !race.ability && subs.length && !sub && 'subrace', !R.background && 'background', !cur.classes.length && 'class',
+    R.classes.some(k => k.cls && k.level >= subclassLevel(k.cls) && !k.sub) && 'subclass', picks && `${picks} pick${picks > 1 ? 's' : ''} (dashed boxes)`].filter(Boolean);
   return `<section class="card setup">
     <div class=setuphead><h2>Character setup</h2><span class=grow></span>
       ${missing.length ? `<small class=muted>Still to choose: ${missing.join(', ')}</small>` : ''}
-      <button class=primary data-act=setupdone>${missing.length ? 'Done for now' : 'Confirm character'}</button></div>
+      <button class=primary data-act=setupdone>${missing.length ? 'Done for now' : 'Confirm character'}</button>${menu(`<button data-act=export data-id=${cur.id}>Export JSON</button>`)}</div>
     <div class=setupgrid><div>
       <label class=field><span>Name</span><input data-path=name value="${esc(cur.name)}"></label>
       <div class=two><label class=field><span>Alignment</span><input data-path=alignment value="${esc(cur.alignment)}"></label>
@@ -540,7 +574,7 @@ function actionsView() {
     const usable = !stored && (a.resId || a.toggleKey || a.slot || a.special);
     return `<div class="act ${stored ? '' : 'derived'} ${a.toggleKey && isOn(a.toggleKey) ? 'on' : ''}"><div class=acthead><b>${name}</b>
         <small class=muted>${esc([r.range, r.props?.filter(p => p !== 'A').join(' ')].filter(Boolean).join(' · '))}</small><span class=grow></span>
-        ${stored ? `<button class=icon data-act=editaction data-i=${i} title=Edit>✎</button><button class=icon data-act=delaction data-i=${i} title=Remove>✕</button>`
+        ${stored ? menu(`<button data-act=editaction data-i=${i}>Edit…</button><button class=danger data-act=delaction data-i=${i}>Remove</button>`, 'sm')
           : `<small class=badge title="Comes from a class feature, trait or Wild Shape">${a.shape ? 'beast' : 'feature'}</small>`}</div>
       ${r.error ? `<p class=warn>${esc(r.error)}</p>` : `<div class=actbtns>
         ${r.hit ? `<span>${bd(`act.${a.id}.hit`, 'Hit')}${r20(`act.${a.id}.hit`, `${r.name} attack`)}</span>` : ''}
@@ -554,9 +588,8 @@ function actionsView() {
         ${usable ? `<button class="${a.toggleKey && isOn(a.toggleKey) ? 'tog on' : 'primary'}" data-act=useaction data-id="${id}">${useLabel}${res ? ` <small>(${a.use || 1} ${esc(res.name)} · ${Math.max(0, res.max - res.used)} left)</small>` : ''}</button>` : ''}
       </div>`}${r.notes ? `<small class=muted>${esc(r.notes)}</small>` : ''}${[...(r.hit?.notes || []), ...(r.dmg?.notes || [])].map(n => `<small class=note>${esc(n)}</small>`).join('')}</div>`;
   };
-  return `<section class=card><h3>Actions</h3>
+  return `<section class=card>${sechead('Actions', '<button data-act=pick data-what=weaponaction>+ Weapon</button><button data-act=pick data-what=spellaction>+ Spell</button><button data-act=newaction>+ Custom</button>')}
     ${S.attacks > 1 ? `<p class=small><b>Extra Attack:</b> the Attack action makes <b>${S.attacks}</b> attacks.</p>` : ''}
-    <div class=btns><button data-act=pick data-what=weaponaction>+ Weapon</button><button data-act=pick data-what=spellaction>+ Spell</button><button data-act=newaction>+ Custom</button></div>
     ${groups.map(g => {
       const xs = S.actions.filter(r => (r.group || 'action') === g || (g === 'other' && !GROUP[r.group]));
       return xs.length ? `<h4>${GROUP[g] || 'Other'}</h4>${xs.map(card).join('')}` : '';
@@ -571,10 +604,10 @@ function spellsView() {
     const prep = lv.filter(k => k.s.prepared).length;
     return `<div class=sc><b>${esc(c.cls)}</b> <small class=muted>${c.ability.toUpperCase()}</small>
       ${bd(`spellDc.${c.cls}`, 'DC')} <b>${c.dc.total}</b> · ${bd(`spellAttack.${c.cls}`, 'Attack')}${r20(`spellAttack.${c.cls}`, `${c.cls} spell attack`)}
-      ${c.prepared ? ` · Prepared ${prep}/${c.prepared}` : c.known ? ` · Known ${lv.length}/${c.known}` : ''}${c.cantrips ? ` · Cantrips ${can}/${c.cantrips}` : ''}</div>`;
+      ${c.prepared ? ` · <span class=nw>Prepared ${prep}/${c.prepared}</span>` : c.known ? ` · <span class=nw>Known ${lv.length}/${c.known}</span>` : ''}${c.cantrips ? ` · <span class=nw>Cantrips ${can}/${c.cantrips}</span>` : ''}</div>`;
   }).join('');
-  const slots = S.slots.map((n, l) => `<div class=slotrow><span>${ORD(l + 1)}</span>${pips(n - (cur.slotsUsed[l] || 0), n, 'slot', `data-l=${l}`)}</div>`).join('')
-    + (S.pact ? `<div class=slotrow><span>Pact (${ORD(S.pact.level)})</span>${pips(S.pact.n - cur.pactUsed, S.pact.n, 'pact')}</div>` : '');
+  const slots = S.slots.map((n, l) => `<div class=slotrow><span>${ORD(l + 1)}</span>${pips(n - (cur.slotsUsed[l] || 0), n, 'slot', `data-l=${l}`, `${ORD(l + 1)}-level slot`)}</div>`).join('')
+    + (S.pact ? `<div class=slotrow><span>Pact (${ORD(S.pact.level)})</span>${pips(S.pact.n - cur.pactUsed, S.pact.n, 'pact', '', 'Pact slot')}</div>` : '');
   const byLvl = {};
   for (const k of known) (byLvl[k.d?.level ?? '?'] ||= []).push(k);
   for (const b of S.R.bonusSpells) {
@@ -586,17 +619,16 @@ function spellsView() {
       <div class=inline><small>Create slot:</small>${COST.map((c, l) => (l < S.slots.length ? `<button data-act=fontslot data-l=${l} ${sp.max - sp.used < c || !(cur.slotsUsed[l] > 0) ? 'disabled' : ''}>${ORD(l + 1)} (−${c})</button>` : '')).join('')}</div>
       <div class=inline><small>Slot → points:</small>${S.slots.map((n, l) => `<button data-act=fontpts data-l=${l} ${n - (cur.slotsUsed[l] || 0) <= 0 ? 'disabled' : ''}>${ORD(l + 1)} (+${l + 1})</button>`).join('')}</div></div>` : '';
   const row = ({ s, i, d, bonus }) => {
-    if (!d) return `<div class=spell><span class=warn>${esc(s.name)} (not in rules data)</span><button class=icon data-act=delspell data-i=${i}>✕</button></div>`;
+    if (!d) return `<div class=spell><span class="warn grow">${esc(s.name)} (not in rules data)</span>${menu(`<button class=danger data-act=delspell data-i=${i}>Remove</button>`, 'sm')}</div>`;
     const def = sourceDef(cur, { key: `spell:${s.name}|${s.source}`, name: s.name, kind: 'spell' }, P), ns = `data-n="${esc(d.name)}" data-s="${esc(d.source)}"`;
     const tag = bonus ? `<span class=badge title="${esc(`${bonus.kind === 'innate' ? 'Innate' : 'Always prepared'} — from ${bonus.origin}`)}">${esc(bonus.uses || (bonus.kind === 'innate' ? 'innate' : bonus.origin))}</span>` : '';
     return `<div class="spell ${bonus ? 'granted' : ''}">${bonus ? '<span class=cb title="Always prepared">★</span>' : d.level ? `<input type=checkbox title=Prepared data-path="spells.${i}.prepared" ${s.prepared ? 'checked' : ''}>` : '<span class=cb></span>'}
       <span class=grow>${link('spell', d)} <small class=muted>${esc(spellTime(d).replace(/,.*/, ''))}${isConc(d) ? ' · C' : ''}${d.meta?.ritual ? ' · R' : ''}${S.spellcasting.length > 1 ? ' · ' + esc(s.cls || '') : ''}</small> ${tag}</span>
       ${d.level ? `<button data-act=cast ${ns}>Cast</button>` : ''}
       ${def?.toggle ? togBtn({ key: `spell:${s.name}|${s.source}`, name: s.name }, 'Active') : isConc(d) ? `<button class="tog ${cur.concentration === d.name ? 'on' : ''}" data-act=conc ${ns}>Conc.</button>` : ''}
-      <button class=icon data-act=spellaction ${ns} title="Add to actions">+ act</button>${bonus ? '' : `<button class=icon data-act=delspell data-i=${i} title=Remove>✕</button>`}</div>`;
+      ${menu(`<button data-act=spellaction ${ns}>Add to actions</button>${bonus ? '' : `<button class=danger data-act=delspell data-i=${i}>Remove</button>`}`, 'sm')}</div>`;
   };
-  return `<section class=card><h3>Spellcasting</h3>${sc || '<p class=muted>No spellcasting class.</p>'}${slots}${font}
-    <div class=btns><button data-act=pick data-what=spell>+ Add spells</button></div>
+  return `<section class=card>${sechead('Spellcasting', '<button data-act=pick data-what=spell>+ Add spells</button>')}${sc || '<p class=muted>No spellcasting class.</p>'}${slots}${font}
     ${Object.keys(byLvl).sort((a, b) => a - b).map(l => `<h4>${l === '0' ? 'Cantrips' : l === '?' ? 'Unknown' : ORD(+l) + ' level'}</h4>${byLvl[l].sort((a, b) => a.s.name.localeCompare(b.s.name)).map(row).join('')}`).join('')}
   </section>`;
 }
@@ -628,10 +660,9 @@ function inventoryView() {
         <button class=danger data-act=delitem data-i=${i}>Remove</button></div></details>`;
   };
   const cards = S.R.items.map(card);
-  return `<section class=card><h3>Inventory</h3>
+  return `<section class=card>${sechead('Inventory', '<button data-act=pick data-what=item>+ Add item</button><button data-act=customitem>+ Custom item</button>')}
     <div class=coins>${['pp', 'gp', 'ep', 'sp', 'cp'].map(k => `<label>${k}<input type=number data-path="currency.${k}" value="${cur.currency[k] || 0}"></label>`).join('')}</div>
     <p class=small>Weight ${S.weight} / ${S.capacity} lb${S.weight > S.capacity ? ' <b class=warn>over capacity</b>' : ''} · Attuned ${att}/3${att > 3 ? ' <b class=warn>too many</b>' : ''}</p>
-    <div class=btns><button data-act=pick data-what=item>+ Add item</button><button data-act=customitem>+ Custom item</button></div>
     ${INV_GROUPS.map(g => [g, cards.filter((_, i) => invGroup(S.R.items[i].data) === g)]).filter(([, xs]) => xs.length)
       .map(([g, xs]) => `<h4>${g}</h4>${xs.join('')}`).join('') || '<p class=muted>Empty.</p>'}</section>`;
 }
@@ -648,8 +679,7 @@ function featuresView() {
         ${s.remove ? `<button class=danger data-act=delsource data-k="${esc(s.key)}">Remove</button>` : ''}
         ${s.custom ? `<button class=danger data-act=delcustom data-id="${s.custom.id}">Remove</button>` : ''}</div></details>`;
   };
-  return `<section class=card><h3>Features &amp; traits</h3>
-    <div class=btns><button data-act=pick data-what=feat>+ Feat</button><button data-act=pick data-what=optfeature>+ Class option</button><button data-act=addcustom>+ Custom modifier</button></div>
+  return `<section class=card>${sechead('Features &amp; traits', '<button data-act=pick data-what=feat>+ Feat</button><button data-act=pick data-what=optfeature>+ Class option</button><button data-act=addcustom>+ Custom modifier</button>')}
     ${choicesView()}
     ${Object.entries(groups).map(([g, xs]) => `<h4>${esc(g)}</h4>${xs.map(card).join('')}`).join('') || '<p class=muted>Choose a race and class first.</p>'}
   </section>`;
@@ -677,22 +707,25 @@ function companionsView() {
         <button class=danger data-act=delcomp data-i=${i}>Remove</button></div>
       ${open ? statblock(m) : ''}</details>`;
   }).join('');
-  return `<section class=card><h3>Companions</h3>${cards || '<p class=note>Familiars, animal companions, summons and mounts, with their own HP and attacks.</p>'}
-    <div class=btns><button data-act=pick data-what=companion ${list('monster').length ? '' : 'disabled title="Refresh the rules data to download creatures"'}>+ Add creature</button></div></section>`;
+  return `<section class=card>${sechead('Companions', `<button data-act=pick data-what=companion ${list('monster').length ? '' : 'disabled title="Refresh the rules data to download creatures"'}>+ Add creature</button>`)}
+    ${cards || '<p class=note>Familiars, animal companions, summons and mounts, with their own HP and attacks. Add one from the ⋮ menu.</p>'}</section>`;
 }
 
 function notesView() {
   return `<section class=card><h3>Notes</h3>${Object.keys(cur.notes).map(k => `<label class=field><span>${cap(k)}</span>
-    <textarea data-path="notes.${k}" rows=${k === 'backstory' || k === 'other' ? 6 : 2}>${esc(cur.notes[k])}</textarea></label>`).join('')}
-    <div class=btns><button data-act=export data-id=${cur.id}>Export JSON</button></div></section>`;
+    <textarea data-path="notes.${k}" rows=${k === 'backstory' || k === 'other' ? 6 : 2}>${esc(cur.notes[k])}</textarea></label>`).join('')}</section>`;
 }
 
 function renderDice() {
-  const last = ui.log[0];
-  $('#dice').innerHTML = `<div class=modes>${[['dis', 'Dis'], ['normal', 'Normal'], ['adv', 'Adv']].map(([m, l]) => `<button class="${ui.mode === m ? 'on' : ''}" data-act=mode data-m=${m}>${l}</button>`).join('')}
+  const last = ui.log[0], bar = $('#dice');
+  bar.hidden = !cur && (!last || last.total != null); // home: only to show a message (e.g. examples loaded), never rolls
+  if (!cur) { bar.innerHTML = last ? `<span class=last>${esc(last.label)}</span>` : ''; return; }
+  const n = hist.id === cur.id ? hist.stack.length : 0;
+  bar.innerHTML = `<button class=undo data-act=undo ${n ? '' : 'disabled'} title="Undo the last change (up to 3)" aria-label="Undo (${n} available)">↶<span class=undolbl> Undo</span>${n ? ` <small>${n}</small>` : ''}</button>
+    <div class=modes>${[['dis', 'Dis'], ['normal', 'Normal'], ['adv', 'Adv']].map(([m, l]) => `<button class="${ui.mode === m ? 'on' : ''}" data-act=mode data-m=${m}>${l}</button>`).join('')}
       <button class="${ui.crit ? 'on' : ''}" data-act=crit title="Double damage dice on next damage roll">Crit</button></div>
     <button class=last data-act=logtoggle>${last ? `${last.total != null ? `<b class="${last.nat === 20 ? 'nat20' : last.nat === 1 ? 'nat1' : ''}">${last.total}</b> ` : ''}${esc(last.label)} <small>${esc(last.text || '')}</small>` : '<span class=muted>Tap a number to roll</span>'}</button>
-    <form class=custom data-act=customroll><input name=expr placeholder="2d6+3" aria-label="Dice expression"><button>Roll</button></form>
+    <form class=custom data-act=customroll><input name=expr placeholder="2d6+3" aria-label="Dice expression" enterkeyhint=go><button>Roll</button></form>
     ${ui.showLog ? `<ol class=log>${ui.log.map(l => `<li>${l.total != null ? `<b>${l.total}</b> ` : ''}${esc(l.label)} <small>${esc(l.text || '')}</small></li>`).join('')}</ol>` : ''}`;
 }
 
@@ -711,18 +744,27 @@ function showInfo(html, push = true) {
   $('#info').scrollTop = 0;
 }
 
+// stat key -> readable name ("ability.str" -> "Strength score")
+function statTitle(k) {
+  const [a, b] = k.split('.'), rest = k.slice(a.length + 1);
+  if (a === 'act') return `${S.actions.find(r => r.spec.id === k.slice(4, k.lastIndexOf('.')))?.name || 'Action'} ${k.endsWith('.hit') ? 'attack' : 'damage'}`;
+  return { ac: 'Armor Class', initiative: 'Initiative', speed: 'Speed', prof: 'Proficiency bonus', hpMax: 'Hit point maximum' }[k]
+    || { ability: `${ABIL_NAME[b]} score`, check: `${ABIL_NAME[b]} check`, save: `${ABIL_NAME[b]} saving throw`, skill: titleCase(rest), passive: `Passive ${titleCase(rest)}`,
+      spellDc: `${rest} spell save DC`, spellAttack: `${rest} spell attack` }[a] || k;
+}
 function breakdownView(k) {
   const s = S.stats[k];
   if (!s) return '<p>Nothing to show.</p>';
   const d20 = !k.startsWith('act.') || k.endsWith('.hit');
   const plain = ['ac', 'speed', 'hpMax', 'prof'].includes(k) || k.startsWith('passive.') || k.startsWith('ability.') || k.startsWith('spellDc.') || k.endsWith('.dmg');
-  return `<h2>${esc(k)}</h2><table class=bd>${s.parts.map(p => `<tr><td>${esc(p.label)}</td><td>${signed(p.value)}</td></tr>`).join('')}
+  // a plain value starts from a base (score, armor, walking speed): show that one unsigned
+  return `<h2>${esc(statTitle(k))}</h2><table class=bd>${s.parts.map((p, i) => `<tr><td>${esc(p.label)}</td><td>${plain && !i && !k.endsWith('.dmg') ? p.value : signed(p.value)}</td></tr>`).join('')}
     ${s.dice.map((d, i) => `<tr><td>${esc(s.diceSrc?.[i] || 'Dice')}</td><td>+${esc(d)}</td></tr>`).join('')}<tr class=total><td>Total</td><td>${s.total}${s.dice.length ? ' + ' + esc(s.dice.join(' + ')) : ''}</td></tr></table>
     ${s.candidates ? `<p class=small><b>AC options:</b> ${esc(s.candidates.join(' · '))}</p>` : ''}
     ${s.adv.length ? `<p class=small><b>Advantage:</b> ${esc(s.adv.join(', '))}</p>` : ''}${s.dis.length ? `<p class=small><b>Disadvantage:</b> ${esc(s.dis.join(', '))}</p>` : ''}
     ${s.notes.map(n => `<p class=note>${esc(n)}</p>`).join('')}
     ${k.startsWith('act.') ? '' : `<label class=field><span>Manual override (blank = computed)</span><input type=number data-path="overrides.${k}" value="${esc(cur.overrides[k] ?? '')}"></label>`}
-    ${!plain && d20 ? `<button class=primary data-act=r20 data-k="${esc(k)}" data-label="${esc(k)}">Roll</button>` : ''}`;
+    ${!plain && d20 ? `<button class=primary data-act=r20 data-k="${esc(k)}" data-label="${esc(statTitle(k))}">Roll</button>` : ''}`;
 }
 
 // generic picker: cfg.items() -> [{x, cat}]
@@ -777,6 +819,9 @@ const PICK = {
       toast(`Transformed into ${x.name}`);
       closeDlg();
     } },
+  prof: { title: () => `Add ${PROF_KINDS[ui.pick.k].toLowerCase()}`, noInfo: true, sub: () => '',
+    items: () => profSuggest(ui.pick.k).map(p => ({ x: { name: titleCase(p), source: '', p }, cat: 'prof' })), has: x => !!S.profs[ui.pick.k][x.p],
+    pick: x => { (cur.extraProfs[ui.pick.k] ||= []).push(x.p); } },
   companion: { title: 'Add companion, familiar or summon', items: () => list('monster').slice().sort((a, b) => a.name.localeCompare(b.name)).map(x => ({ x, cat: 'monster' })),
     sub: x => `${creatureType(x)} · CR ${x.cr?.cr ?? x.cr} · ${x.source}${x.summonedBySpell ? ' · summoned by ' + x.summonedBySpell.split('|')[0] : ''}`,
     pick: x => { cur.companions.push({ id: uid(), name: x.name, source: x.source, hp: x.hp?.average || 1, max: x.hp?.average || 1 }); closeDlg(); } },
@@ -789,7 +834,8 @@ const PICK = {
       return all.filter(h => !p.off.has(GROUP_OF[h.cat]));
     },
     filters: () => `<div class="inline lkf">${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'}" data-act=lookupf data-g="${esc(g)}">${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}
-      <button class=tog data-act=lookupf data-g="*">All</button><button class=tog data-act=lookupf data-g="-">None</button></div>`,
+      <button class=tog data-act=lookupf data-g="*">All</button><button class=tog data-act=lookupf data-g="-">None</button></div>
+      <small class=note>Filled = searched. Tap a category to switch it on or off.</small>`,
     sub: (x, cat) => `${CAT_LABEL[cat]} · ${cat === 'monster' ? `CR ${x.cr?.cr ?? x.cr ?? '—'} ${creatureType(x)} · ` : cat === 'spell' ? spellLevel(x) + ' · ' : x.className ? x.className + ' · ' : ''}${x.source}`,
     pick: (x, cat) => showInfo(detail(cat, x)), keepOpen: true },
 };
@@ -824,8 +870,8 @@ function pickerView() {
     <div class=plist>${xs.map(({ x, cat }, i) => {
       const has = cfg.has?.(x);
       return `<div class=prow><button class=grow data-act=pickrow data-i=${i} ${has ? 'disabled' : ''}>${esc(x.name)}${has ? ' ✓' : ''} <small class=muted>${esc(cfg.sub?.(x, cat) ?? x.source)}</small></button>
-        <button class=icon data-act=info data-cat=${cat} data-name="${esc(x.name)}" data-src="${esc(x.source)}" title=Details>i</button></div>`;
-    }).join('') || `<p class=muted>${q ? 'No matches.' : 'Type to search.'}</p>`}
+        ${cfg.noInfo ? '' : `<button class=icon data-act=info data-cat=${cat} data-name="${esc(x.name)}" data-src="${esc(x.source)}" title=Details>i</button>`}</div>`;
+    }).join('') || `<p class=muted>${q ? 'No matches.' : p.kind === 'lookup' ? 'Type to search, or tap None and then a category to browse it.' : 'Type to search.'}</p>`}
     ${total > xs.length ? `<p class="muted small">Showing ${xs.length} of ${total}: type more or narrow the filters.</p>` : ''}</div>`;
 }
 function openPicker(kind, extra = {}) {
@@ -974,12 +1020,14 @@ function effectsEditor() {
     <div class=btns><button data-act=fxadd>+ Effect</button><button class=primary data-act=fxsave>Save</button></div>`;
 }
 
+// i == null: a new resource drafted in ui.edit, added only on "Add resource"
 function resEditor(i) {
-  const r = cur.resources[i];
-  return `<h2>Resource</h2><label class=field><span>Name</span><input data-path="resources.${i}.name" value="${esc(r.name)}"></label>
-    <label class=field><span>Max (number or formula, e.g. level.monk, max(1,mod.cha))</span><input data-path="resources.${i}.max" value="${esc(r.max)}"></label>
-    <label class=field><span>Resets on</span><select data-path="resources.${i}.reset">${['short', 'long', 'never'].map(x => opt(x, `${x} rest`, r.reset === x)).join('')}</select></label>
-    <div class=btns><button class=danger data-act=delres data-r=${i}>Delete</button></div>`;
+  const r = i == null ? ui.edit : cur.resources[i], p = f => (i == null ? `@edit.${f}` : `resources.${i}.${f}`);
+  return `<h2>${i == null ? 'New resource' : 'Resource'}</h2><label class=field><span>Name</span><input data-path="${p('name')}" value="${esc(r.name)}" placeholder="e.g. Bardic Inspiration" autofocus></label>
+    <label class=field><span>Maximum uses</span><input data-path="${p('max')}" value="${esc(r.max)}">
+      <small class=note>A number, or a formula such as level.monk or max(1,mod.cha)</small></label>
+    <label class=field><span>Resets on</span><select data-path="${p('reset')}">${['short', 'long', 'never'].map(x => opt(x, x === 'never' ? 'never' : `${x} rest`, r.reset === x)).join('')}</select></label>
+    <div class=btns>${i == null ? '<button class=primary data-act=saveres>Add resource</button>' : `<button class=danger data-act=delres data-r=${i}>Delete</button>`}</div>`;
 }
 const resMax = (r, vars = S?.vars || {}) => Math.max(0, ev(r.max, vars));
 const resGet = id => S.resources.find(r => r.id === id);
@@ -1079,6 +1127,8 @@ function doRoll(expr, label, { d20 = false, adv = false, dis = false } = {}) {
   return r;
 }
 
+const stableNote = () => { if (cur.deathSaves.s >= 3) toast('Stable: unconscious at 0 HP until healed'); };
+
 // ---------- actions (event handlers) ----------
 const idx = el => +el.dataset.i;
 const ACT = {
@@ -1098,9 +1148,17 @@ const ACT = {
     saveOff(off); renderDlg();
   },
   home: () => { location.hash = ''; },
+  undo: () => {
+    const s = hist.stack.pop();
+    if (!s) return;
+    hist.base = s;
+    const c = JSON.parse(s);
+    chars[chars.indexOf(cur)] = c; cur = c;
+    save(); toast(`Undone (${hist.stack.length} more available)`); render();
+  },
 
   // home
-  newchar: () => { const c = newChar(); chars.push(c); cur = c; save(); location.hash = c.id; },
+  newchar: () => { const c = newChar(); chars.push(c); cur = c; save(); ui.focusName = true; location.hash = c.id; },
   dup: el => { const c = { ...structuredClone(chars.find(x => x.id === el.dataset.id)), id: uid() }; c.name += ' (copy)'; chars.push(c); db.put('characters', c); render(); },
   delchar: el => {
     const c = chars.find(x => x.id === el.dataset.id);
@@ -1148,7 +1206,7 @@ const ACT = {
   },
 
   // setup
-  pick: el => openPicker(el.dataset.what, el.dataset.what === 'spell' ? { cls: S.spellcasting[0]?.list || S.R.spellBooks[0]?.id || 'all', lvl: 'castable' } : {}),
+  pick: el => openPicker(el.dataset.what, el.dataset.what === 'spell' ? { cls: S.spellcasting[0]?.list || S.R.spellBooks[0]?.id || 'all', lvl: 'castable' } : { k: el.dataset.k }),
   pickrow: el => {
     const it = ui.pick.results[idx(el)], cfg = PICK[ui.pick.kind];
     cfg.pick(it.x, it.cat, it);
@@ -1236,24 +1294,27 @@ const ACT = {
     }
     if (op === 'dmg') {
       const t = Math.min(cur.hp.temp, v);
+      // damage at 0 HP: one failed death save, and a stable character starts saving again
+      if (hp === 0 && v > t) cur.deathSaves = { s: cur.deathSaves.s >= 3 ? 0 : cur.deathSaves.s, f: Math.min(3, cur.deathSaves.f + 1) };
       cur.hp.temp -= t; hp = Math.max(0, hp - (v - t));
       if (cur.concentration) toast(`Concentration (${cur.concentration}): CON save DC ${Math.max(10, Math.floor(v / 2))}`);
     } else if (op === 'heal') { if (hp === 0) cur.deathSaves = { s: 0, f: 0 }; hp = Math.min(max, hp + v); } else cur.hp.temp = Math.max(cur.hp.temp, v);
     cur.hp.current = hp >= max ? null : hp;
     commit();
   },
-  ds: el => { const w = el.dataset.w, i = idx(el); cur.deathSaves[w] = i < cur.deathSaves[w] ? i : i + 1; commit(); },
+  ds: el => { const w = el.dataset.w, i = idx(el); cur.deathSaves[w] = i < cur.deathSaves[w] ? i : i + 1; stableNote(); commit(); },
   deathroll: () => {
     const r = doRoll('1d20', 'Death save', { d20: true }).total;
     if (r === 20) { cur.hp.current = 1; cur.deathSaves = { s: 0, f: 0 }; } else if (r === 1) cur.deathSaves.f = Math.min(3, cur.deathSaves.f + 2);
     else if (r >= 10) cur.deathSaves.s = Math.min(3, cur.deathSaves.s + 1); else cur.deathSaves.f = Math.min(3, cur.deathSaves.f + 1);
-    commit();
+    stableNote(); commit();
   },
   addcond: el => { if (el.value) cur.conditions.push(el.value); commit(); },
   cond: el => { cur.conditions = cur.conditions.filter(c => c !== el.dataset.n); commit(); },
   dropconc: () => { setConc(null); commit(); },
   toggle: el => { toggle(el.dataset.k); commit(); },
-  addres: () => { cur.resources.push({ id: uid(), name: 'Resource', max: 1, used: 0, reset: 'long' }); const i = cur.resources.length - 1; commit(); openDlg(() => resEditor(i)); },
+  addres: () => { ui.edit = { name: '', max: 1, reset: 'long' }; openDlg(() => resEditor(null)); },
+  saveres: () => { cur.resources.push({ id: uid(), used: 0, ...ui.edit, name: ui.edit.name.trim() || 'Resource' }); closeDlg(); commit(); },
   editres: el => { const i = cur.resources.findIndex(r => r.id === el.dataset.id); openDlg(() => resEditor(i)); },
   delres: el => { cur.resources.splice(+el.dataset.r, 1); closeDlg(); commit(); },
   respip: el => { const r = resGet(el.dataset.id), left = r.max - r.used, i = idx(el); resSet(r.id, r.max - (i < left ? i : i + 1)); commit(); },
@@ -1309,8 +1370,11 @@ const ACT = {
     for (const r of S.featureRes) if (r.reset === 'short') delete cur.featureUses[r.id];
     toast('Short rest finished'); closeDlg(); commit();
   },
-  long: () => {
-    if (!confirm('Take a long rest? Restores HP, spell slots, resources and half your hit dice.')) return;
+  long: () => openDlg(() => `<h2>Long rest</h2><p>Restores HP, spell slots, resources and half your hit dice, and lowers exhaustion by one level.</p>
+    <div class=btns><button class=primary data-act=finishlong autofocus>Take long rest</button><button data-act=closedlg>Cancel</button></div>`),
+  closedlg: () => closeDlg(),
+  finishlong: () => {
+    closeDlg();
     Object.assign(cur, { hp: { current: null, temp: 0 }, deathSaves: { s: 0, f: 0 }, slotsUsed: [], pactUsed: 0, exhaustion: Math.max(0, cur.exhaustion - 1) });
     for (const r of cur.resources) if (r.reset !== 'never') r.used = 0;
     cur.featureUses = {};
@@ -1374,7 +1438,6 @@ const ACT = {
     addAction({ kind: 'custom', name: data.name, ability: 'none', dice: dice?.replace(/\s+/g, '') || '', dmgType: /regains? .{0,40}hit points/i.test(txt) ? 'healing' : '',
       group: /bonus action/i.test(txt) ? 'bonus' : /\breaction\b/i.test(txt) ? 'reaction' : 'action', link: { tag: 'item', name: data.name, src: data.source || '', inv: inv.id } });
   },
-  addprof: el => { if (el.value) (cur.extraProfs[el.dataset.k] ||= []).push(el.value); commit(); },
   delprof: el => { const k = el.dataset.k; cur.extraProfs[k] = cur.extraProfs[k].filter(p => p !== el.dataset.v); commit(); },
 
   // actions
@@ -1463,6 +1526,10 @@ document.addEventListener('click', e => {
   if (el.closest('summary')) e.preventDefault();
   ACT[el.dataset.act]?.(el, e);
 });
+document.addEventListener('click', e => {
+  for (const m of document.querySelectorAll('details.menu[open]')) if (!m.contains(e.target) || e.target.closest('.menupop button')) m.open = false;
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => { m.open = false; }); });
 document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.act) return ACT[el.dataset.act]?.(el, e);
@@ -1475,7 +1542,9 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.dataset.path === '@pick.q') { ui.pick.q = e.target.value; renderDlg(); }
+  if (e.target.id === 'hpamt') for (const b of document.querySelectorAll('[data-act=hp]')) { b.disabled = !(+e.target.value > 0); b.title = b.disabled ? 'Type an amount first' : ''; }
 });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'hpamt') $('[data-act=hp][data-op=dmg]:not(:disabled)')?.click(); });
 document.addEventListener('submit', e => {
   if (e.target.dataset.act !== 'customroll') return;
   e.preventDefault();
@@ -1501,6 +1570,7 @@ addEventListener('resize', () => { if (colCount() !== lastCols) { lastCols = col
 
 window.addEventListener('hashchange', () => {
   cur = chars.find(c => c.id === location.hash.slice(1)) || null;
+  ui.log = []; ui.showLog = false; // rolls belong to the character they were made for
   window.scrollTo(0, 0);
   render();
 });

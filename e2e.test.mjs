@@ -49,7 +49,9 @@ const bdText = async k => {
   return t;
 };
 const pick = async (q, re) => { await page.locator('#dlg input.search').fill(q); await page.locator('.prow button.grow', { hasText: re }).first().click(); };
-const addItem = async (q, re) => { await page.locator('[data-act=pick][data-what=item]').click(); await pick(q, re); await page.keyboard.press('Escape'); };
+const menu = blk => page.locator(`[data-blk=${blk}] details.menu > summary`).first().click(); // opens a section's ⋮ menu
+const more = () => page.locator('.namewrap details.menu > summary').click(); // the ⋮ next to the character name
+const addItem = async (q, re) => { await menu('inventory'); await page.locator('[data-act=pick][data-what=item]').click(); await pick(q, re); await page.keyboard.press('Escape'); };
 const act = name => page.locator('.act', { hasText: name }).first();
 const resLeft = async name => page.locator('.status .res', { hasText: name }).first().locator('.pip.on').count();
 const open = async id => { await page.goto(`${URL0}#${id}`); await page.reload(); await page.locator('.status').waitFor(); };
@@ -118,19 +120,19 @@ await check('setup: race, background and class grant proficiencies with their so
 await check('setup confirm hides the panel; Edit character brings it back', async () => {
   await page.locator('[data-act=setupdone]').click();
   assert.equal(await page.locator('.setup').count(), 0);
-  await page.locator('[data-act=editsetup]').click(); await page.locator('.setup').waitFor();
+  await more(); await page.locator('[data-act=editsetup]').click(); await page.locator('.setup').waitFor();
   await page.locator('[data-act=setupdone]').click();
 });
 
 await check('level up: chooser, ASI buttons, feat instead', async () => {
   for (let l = 2; l <= 4; l++) {
-    await page.locator('[data-act=levelchooser]').click();
+    await more(); await page.locator('[data-act=levelchooser]').click();
     await page.locator('[data-act=lvlup]').first().click();
     if (l === 4) { await page.locator('[data-act=asi][data-a=dex]').click(); await page.locator('[data-act=asi][data-a=dex]').click(); }
     await page.getByRole('button', { name: /Average/ }).click();
   }
   assert.match(await bdText('ability.dex'), /ASI \/ other \+2/);
-  await page.locator('[data-act=pick][data-what=feat]').click(); await pick('skilled', /^Skilled/); await page.keyboard.press('Escape');
+  await menu('features'); await page.locator('[data-act=pick][data-what=feat]').click(); await pick('skilled', /^Skilled/); await page.keyboard.press('Escape');
   await page.locator('select[data-path^="profChoices.skill:feat:Skilled"]').first().selectOption('medicine');
   assert.match(await bdText('skill.medicine'), /Proficiency \(Skilled\)/);
   await page.locator('details.feat summary', { hasText: 'Skilled' }).click();
@@ -155,7 +157,7 @@ await check('items: packs unpack, attunement drives AC, potions become actions, 
 });
 
 await check('magic variants: +1 Longsword is a proper weapon with its bonus', async () => {
-  await page.locator('[data-act=pick][data-what=item]').click(); await pick('+1 weapon', /^\+1 Weapon/); await pick('longsword', /^Longsword/);
+  await menu('inventory'); await page.locator('[data-act=pick][data-what=item]').click(); await pick('+1 weapon', /^\+1 Weapon/); await pick('longsword', /^Longsword/);
   await page.keyboard.press('Escape');
   await page.locator('details.item', { hasText: '+1 Longsword' }).locator('summary').click(); // + Action sits in the expanded item
   await page.locator('details.item[open]', { hasText: '+1 Longsword' }).locator('[data-act=itemaction]').click();
@@ -264,6 +266,27 @@ await check('fighter: extra attack, maneuver DC, great weapon fighting note', as
   await act('Unarmed Strike').locator('[data-act=rdmg]', { hasText: /^1d6\+\d$/ }).waitFor(); // greatsword equipped: d6
   await page.locator('details.item', { hasText: 'Greatsword' }).locator('[data-act=equip]').click();
   await act('Unarmed Strike').locator('[data-act=rdmg]', { hasText: /^1d8\+\d$/ }).waitFor(); // empty hands: d8
+});
+
+await check('cleric: Life Domain grants heavy armor; undo restores removals, 3 steps deep', async () => {
+  await open('example-cleric');
+  assert.doesNotMatch(await bdText('ac'), /Not proficient/);
+  const n = await page.locator('.spell').count();
+  for (let i = 0; i < 4; i++) { const row = page.locator('.spell:has([data-act=delspell])').first(); await row.locator('details.menu > summary').click(); await row.locator('[data-act=delspell]').click(); }
+  for (let i = 0; i < 3; i++) await page.locator('[data-act=undo]').click();
+  assert.equal(await page.locator('.spell').count(), n - 1, 'only the last 3 changes come back');
+  assert.ok(await page.locator('[data-act=undo]').isDisabled());
+});
+
+await check('death saves: three successes hide them (stable); damage at 0 HP brings them back with a failure', async () => {
+  await open('example-fighter');
+  await page.locator('#hpamt').fill('999'); await page.locator('[data-act=hp][data-op=dmg]').click();
+  await page.locator('[data-act=ds][data-w=s]').nth(2).click();
+  assert.equal(await page.locator('[data-act=ds]').count(), 0, 'stable: no death saves');
+  await page.locator('#hpamt').fill('1'); await page.locator('[data-act=hp][data-op=dmg]').click();
+  assert.equal(await page.locator('[data-act=ds][data-w=s].on').count(), 0);
+  assert.equal(await page.locator('[data-act=ds][data-w=f].on').count(), 1);
+  await page.getByRole('button', { name: 'Long rest' }).click(); await page.locator('[data-act=finishlong]').click();
 });
 
 await check('layout adapts: 3 / 2 / 1 columns, no sideways scroll, ability boxes fit their panel', async () => {

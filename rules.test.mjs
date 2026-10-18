@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import * as P from './effects.js';
 import { tags, entries, setRules, spellBook, spellMatches } from './data.js';
-import { mod, profBonus, evalFormula, parseDice, roll, mergeDice, spellSlots, computeCharacter, gatherEffects, computeAction, dmgExpr } from './rules.js';
+import { featureProfs, mod, profBonus, evalFormula, parseDice, roll, mergeDice, spellSlots, computeCharacter, gatherEffects, computeAction, dmgExpr } from './rules.js';
 
 assert.equal(mod(10), 0); assert.equal(mod(17), 3); assert.equal(mod(8), -1);
 assert.deepEqual([1, 4, 5, 9, 13, 17, 20].map(profBonus), [2, 2, 3, 4, 5, 6, 6]);
@@ -260,5 +260,13 @@ const shield = { name: 'Shield', source: 'PHB', level: 1, school: 'A' }, alarm =
 assert.ok(spellMatches(shield, 'level=1|class=wizard')); assert.ok(!spellMatches(shield, 'level=0;2|class=wizard'));
 assert.ok(!spellMatches(alarm, 'level=1|class=wizard'), 'alarm is not on the stubbed wizard list');
 assert.ok(spellMatches(alarm, 'level=1|school=a;d|components & miscellaneous=ritual')); assert.ok(!spellMatches(shield, 'level=1|components & miscellaneous=ritual'));
+
+// subclass features grant armor/weapons/tools in prose; "of your choice" picks are skipped
+const wR = { weaponNames: { all: ['scimitar', 'longsword'] } };
+assert.deepEqual(featureProfs(['When you choose this domain at 1st level, you gain proficiency with heavy armor.'], wR), { armor: ['heavy'], weapon: [], tool: [] });
+assert.deepEqual(featureProfs(['you gain proficiency with medium armor, shields, and martial weapons.'], wR), { armor: ['medium', 'shield'], weapon: ['martial'], tool: [] });
+assert.deepEqual(featureProfs(['you gain proficiency with medium armor and the {@item scimitar|phb}.'], wR), { armor: ['medium'], weapon: ['scimitar'], tool: [] });
+assert.deepEqual(featureProfs(["you gain proficiency with heavy armor and {@item smith's tools|phb}."], wR), { armor: ['heavy'], weapon: [], tool: ["smith's tools"] });
+assert.deepEqual(featureProfs(['you gain proficiency with light armor, and you gain proficiency with one type of one-handed melee weapon of your choice.'], wR), { armor: ['light'], weapon: [], tool: [] });
 
 console.log('rules.test.mjs: all assertions passed');
