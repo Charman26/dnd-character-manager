@@ -117,7 +117,7 @@ details.card > summary::before { content: '▸ '; color: var(--accent); } detail
 
 /* stats */
 .lbl { font-family: var(--serif); background: none; border: none; padding: 0; min-height: 0; text-align: left; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
-.num { font: bold 1rem var(--serif); min-width: 3em; padding: .1em .4em; background: var(--field); }
+.num { font: bold 1rem var(--serif); min-width: 3em; padding: .18em .4em .02em; background: var(--field); } /* Bookinsanity's digits ride high in their line box: nudge them to the optical centre */
 .num small { font-weight: normal; color: var(--muted); }
 .adv, .dis { font: bold .7em var(--sans); font-style: normal; color: #fff; border-radius: 3px; padding: 0 .25em; margin-left: .2em; }
 .adv { background: var(--adv); } .dis { background: var(--dis); }
@@ -126,7 +126,7 @@ details.card > summary::before { content: '▸ '; color: var(--accent); } detail
 /* class art behind the top panel (url set inline from the rules data), faded towards the text on the left */
 .status { position: relative; isolation: isolate; }
 .status.art::before { content: ''; position: absolute; inset: 0 0 0 auto; width: min(50%, 560px); z-index: -1; border-radius: inherit; pointer-events: none;
-  opacity: .22; background: var(--art) center 20% / cover no-repeat;
+  opacity: .35; background: var(--art) center 20% / cover no-repeat;
   -webkit-mask-image: linear-gradient(to right, transparent, #000 60%); mask-image: linear-gradient(to right, transparent, #000 60%); }
 @media (max-width: 600px) { .status.art::before { width: 85%; } }
 @container (min-width: 560px) { .abils { grid-template-columns: repeat(6, 1fr); } }
@@ -215,6 +215,7 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
 .x { position: sticky; top: 0; float: right; margin: 6px 6px 0 0; z-index: 1; }
 .search { width: 100%; margin: .4em 0; }
 .plist { max-height: 60vh; overflow-y: auto; }
+.imgprev { display: block; max-width: 100%; max-height: 240px; margin: .3em auto .6em; border-radius: 8px; border: 1px solid var(--line); }
 .kit { margin-top: .35em; padding: .3em .5em; border-left: 3px solid var(--line); } .kit .small { margin: .15em 0; } .kit select { max-width: 100%; }
 .lkf { gap: .3em; margin-bottom: 0; } .lkf small { opacity: .75; }
 .lkf .tog.on.none { opacity: .55; } /* searched, but nothing matches there */

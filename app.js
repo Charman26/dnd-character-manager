@@ -395,9 +395,9 @@ function statusView() {
   }).join('');
   const shape = S.R.shape, canShape = S.featureRes.some(r => r.name === 'Wild Shape');
   const conds = list('condition');
-  const main = S.R.classes.filter(k => k.cls).sort((a, b) => b.level - a.level)[0], art = main && classArt(main.cls, main.sub);
-  return `<section class="card status${art ? ' art' : ''}"${art ? ` style="--art: url('${esc(art)}')"` : ''}>
-    <div class=namewrap><h2 class=charname>${esc(cur.name)}</h2>${menu(`<button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}<button data-act=addres>+ Resource</button>`)}</div>
+  const main = S.R.classes.filter(k => k.cls).sort((a, b) => b.level - a.level)[0], art = cur.image || (main && classArt(main.cls, main.sub));
+  return `<section class="card status${art ? ' art' : ''}"${art ? ` style="--art: url('${esc(cssUrl(art))}')"` : ''}>
+    <div class=namewrap><h2 class=charname>${esc(cur.name)}</h2>${menu(`<button data-act=rename>Rename…</button><button data-act=image>Change image…</button><button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}<button data-act=addres>+ Resource</button>`)}</div>
     ${shape ? `<div class=shape><span class=grow>${IC.shape} <b>Wild Shape: ${link('creature', shape)}</b> <small class=muted>CR ${esc(shape.cr?.cr ?? shape.cr)} · ${esc(speedText(shape.speed))}</small></span>
       <button data-act=revert>Revert</button></div>` : ''}
     <div class=hprow>
@@ -1121,6 +1121,25 @@ function castDone(d, how) {
   toast(`Cast ${d.name}${how}`);
 }
 
+// quotes, backslashes and line breaks would end url('…') early
+const cssUrl = u => String(u).replace(/['"\\\n\r]/g, c => `%${c.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`); // encodeURIComponent leaves ' alone
+const renameView = () => `<h2>Rename</h2><label class=field><span>Name</span><input id=newname value="${esc(cur.name)}" autofocus></label>
+  <div class=btns><button class=primary data-act=renamesave>Save</button><button data-act=closedlg>Cancel</button></div>`;
+const imageView = (msg = '') => `<h2>Character image</h2>
+  ${cur.image ? `<img class=imgprev src="${esc(cur.image)}" alt="Current image">` : '<p class=small>Showing the class art. Pick a picture of your own below.</p>'}
+  <label class=field><span>Picture link</span><input id=imgurl type=url placeholder="https://…" value="${esc(cur.image?.startsWith('http') ? cur.image : '')}" autofocus></label>
+  <div class=btns><button class=primary data-act=imglink>Use link</button>
+    <label class=btn>Upload picture…<input type=file accept="image/*" data-act=imgfile hidden></label>
+    ${cur.image ? '<button class=danger data-act=imgreset>Back to class art</button>' : ''}</div>
+  ${msg ? `<p class=warn>${esc(msg)}</p>` : ''}<p class=note>Uploads are shrunk and saved with the character (and in its JSON export). Linked pictures are cached after the first view, so they also work offline.</p>`;
+// uploads: longest side ≤ 900 px; PNGs stay PNG (token art is often transparent), everything else becomes JPEG
+async function shrinkImage(file, max = 900) {
+  const bmp = await createImageBitmap(file), k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = Object.assign(document.createElement('canvas'), { width: Math.round(bmp.width * k), height: Math.round(bmp.height * k) });
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return file.type === 'image/png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.85);
+}
+
 function shortRestView() {
   return `<h2>Short rest</h2><p>Spend hit dice to heal (adds CON mod ${signed(S.vars['mod.con'])}).</p>
     ${Object.entries(S.hitDice).map(([f, n]) => `<button data-act=spendhd data-f=${f} ${n - (cur.hitDiceUsed[f] || 0) <= 0 ? 'disabled' : ''}>Spend d${f} (${n - (cur.hitDiceUsed[f] || 0)}/${n} left)</button>`).join(' ')}
@@ -1404,6 +1423,22 @@ const ACT = {
   long: () => openDlg(() => `<h2>Long rest</h2><p>Restores HP, spell slots, resources and half your hit dice, and lowers exhaustion by one level.</p>
     <div class=btns><button class=primary data-act=finishlong autofocus>Take long rest</button><button data-act=closedlg>Cancel</button></div>`),
   closedlg: () => closeDlg(),
+  rename: () => openDlg(renameView),
+  renamesave: () => { const n = $('#newname').value.trim(); if (n) cur.name = n; closeDlg(); commit(); },
+  image: () => openDlg(imageView),
+  imglink: () => {
+    const v = $('#imgurl').value.trim();
+    let ok = false;
+    try { ok = /^https?:$/.test(new URL(v).protocol); } catch { /* not a URL */ }
+    if (!ok) return openDlg(() => imageView('Paste a full http(s) link to a picture.'));
+    cur.image = v; closeDlg(); commit();
+  },
+  imgfile: async el => {
+    const f = el.files[0];
+    if (!f) return;
+    try { cur.image = await shrinkImage(f); closeDlg(); commit(); } catch { openDlg(() => imageView(`Couldn't read ${f.name} as a picture.`)); }
+  },
+  imgreset: () => { delete cur.image; closeDlg(); commit(); },
   finishlong: () => {
     closeDlg();
     Object.assign(cur, { hp: { current: null, temp: 0 }, deathSaves: { s: 0, f: 0 }, slotsUsed: [], pactUsed: 0, exhaustion: Math.max(0, cur.exhaustion - 1) });
@@ -1589,7 +1624,11 @@ document.addEventListener('keydown', e => {
     if (D && !$('#dlg').open && !$('#info').open) { e.preventDefault(); ACT.lookup(); }
   }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'hpamt') $('[data-act=hp][data-op=dmg]:not(:disabled)')?.click(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const go = { hpamt: '[data-act=hp][data-op=dmg]:not(:disabled)', newname: '[data-act=renamesave]', imgurl: '[data-act=imglink]' }[e.target.id];
+  if (go) { e.preventDefault(); $(go)?.click(); }
+});
 document.addEventListener('submit', e => {
   if (e.target.dataset.act !== 'customroll') return;
   e.preventDefault();

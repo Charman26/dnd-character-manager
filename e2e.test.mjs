@@ -289,6 +289,28 @@ await check('death saves: three successes hide them (stable); damage at 0 HP bri
   await page.getByRole('button', { name: 'Long rest' }).click(); await page.locator('[data-act=finishlong]').click();
 });
 
+await check('rename and change image: link, upload (shrunk to 900 px), back to class art', async () => {
+  await open('example-monk');
+  await more(); await page.locator('[data-act=rename]').click();
+  await page.locator('#newname').fill('Kael the Swift'); await page.keyboard.press('Enter');
+  assert.equal(await page.locator('.charname').innerText(), 'Kael the Swift');
+  const art = () => page.locator('.status').getAttribute('style');
+  await more(); await page.locator('[data-act=image]').click();
+  await page.locator('#imgurl').fill('javascript:alert(1)'); await page.keyboard.press('Enter');
+  await page.locator('#dlg .warn').waitFor(); // only http(s) links
+  await page.locator('#imgurl').fill("https://example.com/k'ael.png"); await page.keyboard.press('Enter');
+  assert.match(await art(), /url\('https:\/\/example\.com\/k%27ael\.png'\)/, 'quote escaped inside url()');
+  const png = Buffer.from(await page.evaluate(async () => { const c = Object.assign(document.createElement('canvas'), { width: 2000, height: 1000 });
+    return [...new Uint8Array(await (await new Promise(r => c.toBlob(r, 'image/png'))).arrayBuffer())]; }));
+  await more(); await page.locator('[data-act=image]').click();
+  await page.locator('[data-act=imgfile]').setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: png });
+  await page.locator('.status[style*="data:image/png"]').waitFor();
+  assert.deepEqual(await page.evaluate(src => new Promise(ok => { const i = new Image(); i.onload = () => ok([i.width, i.height]); i.src = src; }),
+    (await art()).match(/url\('([^']+)'\)/)[1]), [900, 450]);
+  await more(); await page.locator('[data-act=image]').click(); await page.locator('[data-act=imgreset]').click();
+  assert.match(await art(), /classes\/PHB\/Monk/, 'class art again');
+});
+
 await check('layout adapts: 3 / 2 / 1 columns, no sideways scroll, ability boxes fit their panel', async () => {
   await open('example-cleric');
   const cols = () => page.locator('.grid > .col').count();
