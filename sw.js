@@ -1,5 +1,5 @@
 // App shell only (rules data lives in IndexedDB). Network-first so updates arrive when online; cache when offline.
-const CACHE = 'dndcm-shell-v28', ART = 'dndcm-art';
+const CACHE = 'dndcm-shell-v29', ART = 'dndcm-art';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'rules.js', 'data.js', 'db.js', 'effects.js', 'manifest.webmanifest', 'icon.svg',
   ...['bookinsanity', 'bookinsanity-bold', 'bookinsanity-italic', 'bookinsanity-bold-italic', 'mr-eaves-small-caps', 'nodesto-caps-condensed', 'scaly-sans', 'scaly-sans-bold', 'scaly-sans-caps'].map(f => `fonts/${f}.woff2`)];
 

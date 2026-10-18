@@ -213,6 +213,10 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
 .plist { max-height: 60vh; overflow-y: auto; }
 .kit { margin-top: .35em; padding: .3em .5em; border-left: 3px solid var(--line); } .kit .small { margin: .15em 0; } .kit select { max-width: 100%; }
 .lkf { gap: .3em; margin-bottom: 0; } .lkf small { opacity: .75; }
+.lkf .tog.on.none { opacity: .55; } /* searched, but nothing matches there */
+.search:focus ~ .plist .prow:first-child > button.grow { background: var(--chip); } /* what Enter will open */
+@media (max-width: 600px) { .lkf { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 0 2.5em 2px 0;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5em), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 2.5em), transparent); } .lkf .tog { flex: none; } } /* one swipeable row: results stay above the keyboard */
 .lkf .tog[data-g]:not(.on):not([data-g="*"]):not([data-g="-"]) { text-decoration: line-through; color: var(--muted); }
 .prow { display: flex; gap: .2em; border-bottom: 1px dotted var(--line); }
 .prow > button.grow { font-family: var(--serif); text-align: left; background: none; border: none; display: flex; flex-direction: column; align-items: flex-start; }

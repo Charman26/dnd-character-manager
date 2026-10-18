@@ -131,17 +131,26 @@ export const SEARCH_GROUPS = [
   ['Traps & hazards', ['trap', 'hazard', 'object']], ['Deities & gifts', ['deity', 'reward', 'cult', 'boon']],
 ];
 const ABC = new Intl.Collator();
-// Every word of the query must appear in the name; exact, then prefix, then word start, then anywhere. Empty query lists everything.
+// lowercase, apostrophes dropped, other punctuation -> one space: "Hunter's Mark" ~ "hunters mark" (cached: names repeat every keystroke)
+const FOLD = new Map();
+const fold = s => FOLD.get(s) ?? FOLD.set(s, s.toLowerCase().replace(/['’`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()).get(s);
+// how well a name matches a query: 0 exact (spaces ignored, so "fire ball" = Fireball), 1 prefix, 2 every word starts a word, 3 anywhere; -1 no match
+export function matchScore(name, q) {
+  const n = fold(name), w = fold(q), words = w ? w.split(' ') : [], nn = n.replace(/ /g, ''), ww = w.replace(/ /g, '');
+  if (!words.length) return 0;
+  if (!words.every(x => n.includes(x)) && !nn.includes(ww)) return -1;
+  return nn === ww ? 0 : n.startsWith(w) ? 1 : words.every(x => ` ${n}`.includes(` ${x}`)) ? 2 : 3;
+}
+// Every word of the query must appear in the name, best matches first. Empty query lists everything.
 export function search(q, cats = Object.keys(CAT_LABEL)) {
-  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean), whole = words.join(' '), hits = [];
-  const starts = words.map(w => new RegExp(`\\b${w.replace(/\W/g, '\\$&')}`));
+  const hits = [];
   for (const cat of cats) for (const x of list(cat)) {
     if (!x.name) continue; // unnamed "standard" subraces: nothing to show
-    const n = x.name.toLowerCase();
-    if (!words.every(w => n.includes(w))) continue;
-    hits.push({ cat, x, score: !whole ? 0 : n === whole ? 0 : n.startsWith(whole) ? 1 : starts.every(r => r.test(n)) ? 2 : 3 });
+    const score = matchScore(x.name, q);
+    if (score >= 0) hits.push({ cat, x, score });
   }
-  return hits.sort((a, b) => a.score - b.score || ABC.compare(a.x.name, b.x.name));
+  // equally good matches: the closest (shortest) name first while typing, alphabetical when browsing
+  return hits.sort((a, b) => a.score - b.score || (q.trim() ? a.x.name.length - b.x.name.length : 0) || ABC.compare(a.x.name, b.x.name));
 }
 
 // ---------- creatures ----------

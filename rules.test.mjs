@@ -1,7 +1,7 @@
 // Run: node rules.test.mjs
 import assert from 'node:assert/strict';
 import * as P from './effects.js';
-import { tags, entries, setRules, spellBook, spellMatches } from './data.js';
+import { tags, entries, setRules, spellBook, spellMatches, matchScore } from './data.js';
 import { featureProfs, mod, profBonus, evalFormula, parseDice, roll, mergeDice, spellSlots, computeCharacter, gatherEffects, computeAction, dmgExpr } from './rules.js';
 
 assert.equal(mod(10), 0); assert.equal(mod(17), 3); assert.equal(mod(8), -1);
@@ -268,5 +268,13 @@ assert.deepEqual(featureProfs(['you gain proficiency with medium armor, shields,
 assert.deepEqual(featureProfs(['you gain proficiency with medium armor and the {@item scimitar|phb}.'], wR), { armor: ['medium'], weapon: ['scimitar'], tool: [] });
 assert.deepEqual(featureProfs(["you gain proficiency with heavy armor and {@item smith's tools|phb}."], wR), { armor: ['heavy'], weapon: [], tool: ["smith's tools"] });
 assert.deepEqual(featureProfs(['you gain proficiency with light armor, and you gain proficiency with one type of one-handed melee weapon of your choice.'], wR), { armor: ['light'], weapon: [], tool: [] });
+
+// search: punctuation and spaces don't matter, exact beats prefix beats word start beats anywhere
+assert.equal(matchScore("Hunter's Mark", 'hunters mark'), 0);
+assert.equal(matchScore('Fireball', 'fire ball'), 0);
+assert.equal(matchScore('Fireball', 'fire'), 1);
+assert.equal(matchScore('Mass Cure Wounds', 'wounds cure'), 2);
+assert.equal(matchScore('Delayed Blast Fireball', 'ball'), 3);
+assert.equal(matchScore('Longsword', 'longsowrd'), -1);
 
 console.log('rules.test.mjs: all assertions passed');

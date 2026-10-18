@@ -7,7 +7,7 @@ import {
 import {
   D, classArt, imgUrl, downloadRules, setRules, list, find, refOf, lookup, search, CAT_LABEL, SEARCH_GROUPS, subclassesOf, findSubclass, classFeatures,
   subclassFeatures, subclassLevel, spellClasses, subclassSpellNames, spellBook, spellMatches, variantBases, resolveItem, esc, entries, detail, spellLevel,
-  spellTime, isConc, itemType, abilityText, itemLine, crNum, creatureType, creatureAc, speedText, statblock, grantedSpells, spellAlternatives,
+  spellTime, isConc, itemType, matchScore, abilityText, itemLine, crNum, creatureType, creatureAc, speedText, statblock, grantedSpells, spellAlternatives,
 } from './data.js';
 
 const $ = s => document.querySelector(s);
@@ -734,7 +734,8 @@ function openDlg(view) {
   ui.dlg = view;
   $('#dlgBody').innerHTML = view();
   if (!$('#dlg').open) $('#dlg').showModal();
-  $('#dlgBody').querySelector('[autofocus]')?.focus();
+  const af = $('#dlgBody').querySelector('[autofocus]');
+  af?.focus(); af?.select?.();
 }
 const closeDlg = () => { ui.dlg = null; if ($('#dlg').open) $('#dlg').close(); };
 function showInfo(html, push = true) {
@@ -833,7 +834,7 @@ const PICK = {
       for (const h of all) p.counts[GROUP_OF[h.cat]] = (p.counts[GROUP_OF[h.cat]] || 0) + 1;
       return all.filter(h => !p.off.has(GROUP_OF[h.cat]));
     },
-    filters: () => `<div class="inline lkf">${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'}" data-act=lookupf data-g="${esc(g)}">${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}
+    filters: () => `<div class="inline lkf">${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'} ${ui.pick.counts[g] ? '' : 'none'}" data-act=lookupf data-g="${esc(g)}">${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}
       <button class=tog data-act=lookupf data-g="*">All</button><button class=tog data-act=lookupf data-g="-">None</button></div>
       <small class=note>Filled = searched. Tap a category to switch it on or off.</small>`,
     sub: (x, cat) => `${CAT_LABEL[cat]} · ${cat === 'monster' ? `CR ${x.cr?.cr ?? x.cr ?? '—'} ${creatureType(x)} · ` : cat === 'spell' ? spellLevel(x) + ' · ' : x.className ? x.className + ' · ' : ''}${x.source}`,
@@ -853,20 +854,18 @@ function spellPickItems() {
   return xs.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name)).map(x => ({ x, cat: 'spell' }));
 }
 const GROUP_OF = Object.fromEntries(SEARCH_GROUPS.flatMap(([g, cats]) => cats.map(c => [c, g])));
-// lookup filters are remembered per browser (a convenience; a blocked storage just starts with everything on)
-const LOOKUP_OFF = 'dndcm-lookup-off';
-const loadOff = () => { try { return new Set(JSON.parse(localStorage.getItem(LOOKUP_OFF)) || []); } catch { return new Set(); } };
-const saveOff = off => { try { localStorage.setItem(LOOKUP_OFF, JSON.stringify([...off])); } catch { /* private mode */ } };
 
 function pickerView() {
-  const p = ui.pick, cfg = PICK[p.kind], q = p.q.trim().toLowerCase();
+  const p = ui.pick, cfg = PICK[p.kind], q = p.q.trim();
   let xs = cfg.items();
-  if (q && p.kind !== 'lookup') xs = xs.filter(i => i.x.name.toLowerCase().includes(q));
+  // same matching and ranking as the lookup; ties keep the picker's own order (spells by level)
+  if (q && p.kind !== 'lookup') xs = xs.map(i => [i, matchScore(i.x.name, q)]).filter(([, s]) => s >= 0).sort((a, b) => a[1] - b[1]).map(([i]) => i);
   else if (!q && xs.length > 400 && !cfg.browse?.()) xs = [];
   const total = xs.length;
   p.results = xs = xs.slice(0, 250);
-  return `<h2>${esc(typeof cfg.title === 'function' ? cfg.title() : cfg.title)}</h2>${cfg.filters?.() || ''}
-    <input class=search type=search data-path="@pick.q" value="${esc(p.q)}" placeholder="Search…" autofocus>
+  return `<h2>${esc(typeof cfg.title === 'function' ? cfg.title() : cfg.title)}</h2>
+    <input class=search type=search data-path="@pick.q" value="${esc(p.q)}" placeholder="${p.kind === 'lookup' ? 'Spells, items, creatures, rules…' : 'Search…'}" enterkeyhint=search autofocus
+      title="Enter opens the first result; ↓ moves into the list">${cfg.filters?.() || ''}
     <div class=plist>${xs.map(({ x, cat }, i) => {
       const has = cfg.has?.(x);
       return `<div class=prow><button class=grow data-act=pickrow data-i=${i} ${has ? 'disabled' : ''}>${esc(x.name)}${has ? ' ✓' : ''} <small class=muted>${esc(cfg.sub?.(x, cat) ?? x.source)}</small></button>
@@ -1141,11 +1140,11 @@ const ACT = {
   logtoggle: () => { ui.showLog = !ui.showLog; renderDice(); },
   info: el => showInfo(detail(el.dataset.cat, find(el.dataset.cat, el.dataset.name, el.dataset.src))),
   infoback: () => { ui.info.pop(); showInfo(ui.info.at(-1), false); },
-  lookup: () => openPicker('lookup', { off: loadOff() }),
+  lookup: () => openPicker('lookup', { off: new Set(), q: ui.lastQ || '' }), // every category on; reopens on the last search, selected so typing replaces it
   lookupf: el => {
     const off = ui.pick.off, g = el.dataset.g;
     if (g === '*') off.clear(); else if (g === '-') SEARCH_GROUPS.forEach(([x]) => off.add(x)); else off.has(g) ? off.delete(g) : off.add(g);
-    saveOff(off); renderDlg();
+    renderDlg();
   },
   home: () => { location.hash = ''; },
   undo: () => {
@@ -1541,8 +1540,22 @@ document.addEventListener('change', e => {
   requestAnimationFrame(render);
 });
 document.addEventListener('input', e => {
-  if (e.target.dataset.path === '@pick.q') { ui.pick.q = e.target.value; renderDlg(); }
+  if (e.target.dataset.path === '@pick.q') { ui.pick.q = e.target.value; if (ui.pick.kind === 'lookup') ui.lastQ = ui.pick.q; renderDlg(); }
   if (e.target.id === 'hpamt') for (const b of document.querySelectorAll('[data-act=hp]')) { b.disabled = !(+e.target.value > 0); b.title = b.disabled ? 'Type an amount first' : ''; }
+});
+// pickers: Enter takes the first result, arrows walk the list and back up to the search box
+// anywhere else: "/" or Ctrl/Cmd+K opens the lookup
+document.addEventListener('keydown', e => {
+  const t = e.target, rows = [...document.querySelectorAll('#dlg .prow button.grow:not(:disabled)')];
+  if (t.matches?.('#dlg input.search')) {
+    if (e.key === 'Enter') { e.preventDefault(); rows[0]?.click(); }
+    if (e.key === 'ArrowDown' && rows[0]) { e.preventDefault(); rows[0].focus(); }
+  } else if (rows.includes(t) && /^Arrow(Up|Down)$/.test(e.key)) {
+    e.preventDefault();
+    (rows[rows.indexOf(t) + (e.key === 'ArrowDown' ? 1 : -1)] || $('#dlg input.search')).focus();
+  } else if ((e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) || (e.key === 'k' && (e.ctrlKey || e.metaKey))) {
+    if (D && !$('#dlg').open && !$('#info').open) { e.preventDefault(); ACT.lookup(); }
+  }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'hpamt') $('[data-act=hp][data-op=dmg]:not(:disabled)')?.click(); });
 document.addEventListener('submit', e => {
