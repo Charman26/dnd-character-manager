@@ -1,8 +1,10 @@
 // End-to-end browser test: serves the app, drives it in headless Chrome with a fresh profile, asserts on what the sheet shows.
-// Run: RULES_REPO=https://github.com/owner/repo npm run test:e2e   (needs network for the one-time rules download, and Google Chrome; set E2E_CHANNEL= to use Playwright's chromium)
+// Run: RULES_REPO=https://github.com/owner/repo npm run test:e2e   (needs Google Chrome; set E2E_CHANNEL= to use Playwright's chromium)
+// The rules files are downloaded once into node_modules/.cache/dndcm-e2e-rules and served from there afterwards (delete it to refresh).
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, normalize, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +28,17 @@ const URL0 = `http://127.0.0.1:${server.address().port}/`;
 const profile = await mkdtemp(join(tmpdir(), 'dndcm-e2e-'));
 const channel = process.env.E2E_CHANNEL ?? 'chrome';
 const ctx = await chromium.launchPersistentContext(profile, { ...(channel && { channel }), headless: true, viewport: { width: 1400, height: 1000 } });
+// the app still fetches and processes every rules file; only the network is skipped once a file is on disk
+const CACHE = join(ROOT, 'node_modules/.cache/dndcm-e2e-rules');
+await mkdir(CACHE, { recursive: true });
+await ctx.route('https://raw.githubusercontent.com/*/*/main/data/**', async route => {
+  const file = join(CACHE, createHash('sha1').update(route.request().url()).digest('hex') + '.json');
+  const hit = await readFile(file).catch(() => null);
+  if (hit) return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: hit });
+  const r = await route.fetch(), body = await r.body();
+  if (r.ok()) await writeFile(file, body);
+  return route.fulfill({ response: r, body });
+});
 const page = ctx.pages()[0] || await ctx.newPage();
 page.setDefaultTimeout(8000);
 const pageErrors = [];
@@ -50,6 +63,10 @@ const bdText = async k => {
 };
 const pick = async (q, re) => { await page.locator('#dlg input.search').fill(q); await page.locator('.prow button.grow', { hasText: re }).first().click(); };
 const menu = blk => page.locator(`[data-blk=${blk}] details.menu > summary`).first().click(); // opens a section's ⋮ menu
+// picks re-render on the next frame: wait for it so the following pick doesn't land on a select being replaced
+const frame = () => page.evaluate(() => new Promise(r => requestAnimationFrame(r)));
+const choose = async (loc, v) => { await loc.selectOption(v); await frame(); };
+const done = () => page.locator('#dlg [data-act=lu]').click(); // takes the level
 const more = () => page.locator('.namewrap details.menu > summary').click(); // the ⋮ next to the character name
 const addItem = async (q, re) => { await menu('inventory'); await page.locator('[data-act=pick][data-what=item]').click(); await pick(q, re); await page.keyboard.press('Escape'); };
 const act = name => page.locator('.act', { hasText: name }).first();
@@ -98,11 +115,22 @@ await check('setup: race, background and class grant proficiencies with their so
   await page.locator('[data-act=pick][data-what=race]').click(); await pick('half-elf', /^Half-Elf PHB/);
   await page.locator('[data-act=pick][data-what=background]').click(); await pick('acolyte', /^Acolyte/);
   await page.locator('[data-act=pick][data-what=class]').click(); await pick('rogue', /Rogue/);
-  await page.getByRole('button', { name: /Confirm level 1/ }).click();
-  assert.match(await bdText('skill.insight'), /Proficiency \(Acolyte\)/);
+  await done(); // first level: maximum hit die, nothing to choose
+  // the level's own picks (rogue skills, expertise) keep the dialog open; the half-elf's open picks don't
+  await page.keyboard.press('Escape'); await frame();
+  const skills = page.locator('#dlg select[data-path^="profChoices.skill:class"]');
+  assert.equal(await skills.count(), 4, 'rogue picks 4 skills');
+  assert.equal(await page.locator('#dlg select[data-path^="profChoices.skill:race"], #dlg select[data-path^="abilityChoices."]').count(), 0);
+  assert.ok(await page.locator('#dlg [data-act=closedlg]').isDisabled());
+  for (const [i, s] of ['stealth', 'perception', 'acrobatics', 'deception'].entries()) await choose(skills.nth(i), s);
+  assert.equal(await skills.count(), 4, 'made picks stay listed until Done, so they can be changed');
+  await choose(skills.nth(3), 'athletics'); await choose(skills.nth(3), 'deception');
+  await choose(page.locator('#dlg select[data-path^="profChoices.expertise:"]').first(), 'insight');
+  await choose(page.locator('#dlg select[data-path^="profChoices.expertise:"]').nth(1), 'stealth');
+  await page.locator('#dlg [data-act=closedlg]').click();
   assert.match(await bdText('save.dex'), /Proficiency \(Rogue\)/);
-  assert.equal(await page.locator('.setup select[data-path^="profChoices.skill:class"]').count(), 4, 'rogue picks 4 skills');
-  await page.locator('select[data-path^="profChoices.expertise:"]').first().selectOption('insight');
+  assert.equal(await page.locator('.setup select[data-path^="profChoices.skill:class"]').count(), 4);
+  assert.match(await bdText('skill.religion'), /Proficiency \(Acolyte\)/);
   assert.match(await bdText('skill.insight'), /Expertise \(Rogue Expertise/);
   // background kit: items unpacked into single entries, pouch coins into the purse; swapping takes the old kit back
   const inv = () => page.locator('[data-blk=inventory]').innerText(), gp = () => page.locator('input[data-path="currency.gp"]').inputValue();
@@ -124,20 +152,55 @@ await check('setup confirm hides the panel; Edit character brings it back', asyn
   await page.locator('[data-act=setupdone]').click();
 });
 
-await check('level up: chooser, ASI buttons, feat instead', async () => {
+await check('level up: hit points, archetype and ASI before Done; ⚠ lists open picks', async () => {
   for (let l = 2; l <= 4; l++) {
     await more(); await page.locator('[data-act=levelchooser]').click();
     await page.locator('[data-act=lvlup]').first().click();
-    if (l === 4) { await page.locator('[data-act=asi][data-a=dex]').click(); await page.locator('[data-act=asi][data-a=dex]').click(); }
-    await page.getByRole('button', { name: /Average/ }).click();
+    assert.ok(await page.locator('#dlg [data-act=lu]').isDisabled(), 'hit points not chosen yet');
+    await choose(page.locator('#dlg select[data-path="@lu.hp"]'), 'avg');
+    if (l === 3) {
+      assert.ok(await page.locator('#dlg [data-act=lu]').isDisabled(), 'no archetype yet');
+      await choose(page.locator('#dlg select[data-act=setsub]'), { label: 'Thief (PHB)' });
+    }
+    if (l === 4) {
+      await page.locator('[data-act=asi][data-a=dex]').click();
+      assert.ok(await page.locator('#dlg [data-act=lu]').isDisabled(), 'one ASI point still to spend');
+      await page.locator('[data-act=asi][data-a=dex]').click();
+    }
+    await done();
   }
   assert.match(await bdText('ability.dex'), /ASI \/ other \+2/);
   await menu('features'); await page.locator('[data-act=pick][data-what=feat]').click(); await pick('skilled', /^Skilled/); await page.keyboard.press('Escape');
-  await page.locator('select[data-path^="profChoices.skill:feat:Skilled"]').first().selectOption('medicine');
+  await page.locator('.namewrap [data-act=openpicks]').click(); // ⚠: the open picks in an overlay
+  await choose(page.locator('#dlg select[data-path^="profChoices.skill:feat:Skilled"]').first(), 'medicine');
+  await page.keyboard.press('Escape');
   assert.match(await bdText('skill.medicine'), /Proficiency \(Skilled\)/);
   await page.locator('details.feat summary', { hasText: 'Skilled' }).click();
   await page.locator('details.feat[open] [data-act=delsource]').click();
   assert.doesNotMatch(await bdText('skill.medicine'), /Proficiency/, 'removing the feat removes its grant');
+});
+
+await check('edit character: level-up breakdown, edit a level, undo only the latest', async () => {
+  await more(); await page.locator('[data-act=editsetup]').click();
+  const rows = page.locator('.setup .lvrow'), max = async () => +(await hpText()).match(/\/ (\d+)/)[1];
+  assert.equal(await rows.count(), 4);
+  assert.match(await rows.nth(2).innerText(), /Rogue 3[\s\S]*Thief/);
+  assert.match(await rows.nth(3).innerText(), /ASI DEX \+2/);
+  await rows.nth(3).locator('[data-act=lvedit]').click();
+  await choose(page.locator('#dlg select[data-act=lvasi]').nth(1), 'str');
+  await choose(page.locator('#dlg select[data-act=lvhp]'), '8');
+  await page.locator('#dlg [data-act=closedlg]').click();
+  assert.match(await rows.nth(3).innerText(), /HP 8 \(rolled\)[\s\S]*ASI STR \+1, DEX \+1/);
+  assert.match(await bdText('ability.str'), /ASI \/ other \+1/);
+  const m0 = await max();
+  await rows.nth(3).locator('[data-act=lvundo]').click();
+  assert.equal(await rows.count(), 3);
+  assert.ok(await max() < m0, 'level 4 hit points removed');
+  assert.doesNotMatch(await bdText('ability.str'), /ASI \/ other \+[1-9]/);
+  assert.doesNotMatch(await bdText('ability.dex'), /ASI \/ other \+[1-9]/);
+  assert.match(await rows.nth(2).innerText(), /Thief/, 'earlier levels untouched');
+  assert.equal(await rows.nth(2).locator('[data-act=lvundo]').count(), 1, 'level 3 is now the one to undo');
+  await page.locator('[data-act=setupdone]').click();
 });
 
 await check('items: packs unpack, attunement drives AC, potions become actions, armor proficiency warning', async () => {
@@ -289,6 +352,22 @@ await check('death saves: three successes hide them (stable); damage at 0 HP bri
   await page.getByRole('button', { name: 'Long rest' }).click(); await page.locator('[data-act=finishlong]').click();
 });
 
+await check('feat instead of an ASI: picker, then the feat\'s own picks, before the level closes', async () => {
+  await open('example-fighter');
+  await more(); await page.locator('[data-act=levelchooser]').click();
+  await page.locator('[data-act=lvlup]').first().click();
+  await page.locator('#dlg [data-path="@lu.feat"]').check();
+  await choose(page.locator('#dlg select[data-path="@lu.hp"]'), 'avg'); await done();
+  await page.keyboard.press('Escape'); await frame(); // closing the picker returns to the level's choices
+  await page.locator('#dlg [data-act=pick][data-what=feat]').click(); await pick('skilled', /^Skilled/);
+  const sel = page.locator('#dlg select[data-path^="profChoices.skill:feat:Skilled"]');
+  for (const [i, s] of ['arcana', 'history', 'nature'].entries()) await choose(sel.nth(i), s);
+  await page.locator('#dlg [data-act=closedlg]').click();
+  assert.equal(await page.locator('#dlg[open]').count(), 0);
+  assert.equal(await page.locator('.namewrap [data-act=openpicks]').count(), 0, 'nothing left to choose');
+  assert.match(await bdText('skill.nature'), /Proficiency \(Skilled\)/);
+});
+
 await check('rename and change image: link, upload (shrunk to 900 px), back to class art', async () => {
   await open('example-monk');
   await more(); await page.locator('[data-act=rename]').click();
@@ -340,6 +419,166 @@ await check('works offline after the first visit', async () => {
   assert.ok(await page.evaluate(src => new Promise(ok => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = src; }), art), 'class art loads offline');
   await ctx.setOffline(false);
 });
+
+// ---------- random builds: chosen in one go vs chosen differently and edited afterwards ----------
+// Build A takes every choice from one set of preferences; build B makes other choices while levelling (another subclass,
+// other picks, rolled hit points), then edits each level back through the level history. Some options only exist later
+// (expertise in a skill gained at a later level), so both end with a settle pass: every level's Edit, preferences applied
+// until nothing changes. The saved character and the whole sheet must then match. A also levels once more and undoes it.
+// E2E_FUZZ = number of characters (default 4), E2E_SEED = starting seed (printed, to replay a failure).
+const FUZZ = +(process.env.E2E_FUZZ ?? 4), SEED0 = +(process.env.E2E_SEED ?? Date.now() % 1e6);
+const hash = str => { let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
+const rng = seed => () => { // mulberry32
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+};
+const CLASSES = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];
+const RACES = [['human', /^Human PHB/], ['half-orc', /^Half-Orc PHB/], ['half-elf', /^Half-Elf PHB/]];
+function randomSpec(seed) {
+  const r = rng(seed), any = xs => xs[Math.floor(r() * xs.length)], levels = 3 + Math.floor(r() * 6), first = any(CLASSES);
+  const second = r() < 0.4 ? any(CLASSES.filter(c => c !== first)) : null, joins = 2 + Math.floor(r() * (levels - 1));
+  return { race: any(RACES), steps: Array.from({ length: levels }, (_, i) => (second && i + 1 >= joins && r() < 0.6 ? second : first)) };
+}
+// the dialog's selects, grouped (a pick's slots share a group); each group's slots get its options ranked by the seed
+async function fillDialog(seed) {
+  let changes = 0;
+  for (let guard = 0; guard < 60; guard++) {
+    const sels = await page.$$eval('#dlg select', els => els.map(e => ({ path: e.dataset.path, act: e.dataset.act, i: e.dataset.i, n: e.dataset.n, j: e.dataset.j, c: e.dataset.c, l: e.dataset.l, value: e.value,
+      opts: [...e.options].filter(o => o.value && !o.disabled && !o.text.includes('prerequisite not met')).map(o => o.value) })));
+    const group = x => (x.path ? x.path.replace(/\.\d+$/, '') : `${x.act}:${x.i ?? x.n ?? x.c}`), slot = x => +(x.path?.match(/\.(\d+)$/)?.[1] ?? x.j ?? 0);
+    const sel = x => (x.path ? `#dlg select[data-path="${x.path}"]` : x.act === 'lvasi' ? `#dlg select[data-act=lvasi][data-n="${x.n}"][data-j="${x.j}"]`
+      : x.act === 'lvhp' ? `#dlg select[data-act=lvhp][data-c="${x.c}"][data-l="${x.l}"]` : `#dlg select[data-act=${x.act}][data-i="${x.i}"]`);
+    const want = x => {
+      if (x.act === 'lvhp') return ''; // average: build B's rolls are edited back here
+      const opts = [...new Set(sels.filter(y => group(y) === group(x)).flatMap(y => y.opts))].sort((a, b) => hash(`${seed}|${group(x)}|${a}`) - hash(`${seed}|${group(x)}|${b}`));
+      return opts.length ? opts[slot(x) % opts.length] : x.value;
+    };
+    const x = sels.find(y => y.value !== want(y));
+    if (!x) return changes;
+    await choose(page.locator(sel(x)), want(x)); changes++;
+  }
+  throw Error('dialog choices never settled');
+}
+// stage 1 of a level-up (hit points, subclass, ASI), Done, then the level's own choices
+async function levelStage(seed, rollHp) {
+  const hp = page.locator('#dlg select[data-path="@lu.hp"]');
+  if (await hp.count()) await choose(hp, rollHp ? 'roll' : 'avg');
+  const sub = page.locator('#dlg select[data-act=setsub]');
+  if (await sub.count()) await fillDialog(seed);
+  for (let k = 0; k < 2; k++) {
+    const btns = await page.$$eval('#dlg [data-act=asi]:not(:disabled)', bs => bs.map(b => b.dataset.a));
+    if (!btns.length) break;
+    const a = btns.sort((x, y) => hash(`${seed}|asi|${x}`) - hash(`${seed}|asi|${y}`))[0];
+    await page.locator(`#dlg [data-act=asi][data-a=${a}]`).click(); await frame();
+  }
+  await done(); await frame();
+  if (await page.locator('#dlg[open] [data-act=closedlg]').count()) {
+    await fillDialog(seed);
+    assert.ok(!(await page.locator('#dlg [data-act=closedlg]').isDisabled()), `level choices can't be completed: ${(await page.locator('#dlg').innerText()).slice(0, 300)}`);
+    await page.locator('#dlg [data-act=closedlg]').click(); await frame();
+  }
+}
+async function build(spec, seed, rollHp) {
+  await home(); await page.getByRole('button', { name: 'New character' }).click(); await page.locator('.setup').waitFor();
+  await page.locator('[data-act=pick][data-what=race]').click(); await pick(...spec.race);
+  await page.locator('[data-act=pick][data-what=background]').click(); await pick('soldier', /^Soldier/);
+  const joined = [];
+  for (const [i, c] of spec.steps.entries()) {
+    if (i) { await more(); await page.locator('[data-act=levelchooser]').click(); }
+    if (!joined.includes(c)) { await page.locator(i ? '#dlg [data-act=pick][data-what=class]' : '[data-act=pick][data-what=class]').click(); await pick(c.toLowerCase(), new RegExp(`^${c}`)); joined.push(c); }
+    else await page.locator(`#dlg [data-act=lvlup][data-i="${joined.indexOf(c)}"]`).click();
+    await levelStage(seed, rollHp && i > 0);
+    if (!i) await page.locator('[data-act=setupdone]').click();
+  }
+  await page.locator('#hpamt').fill('3'); await page.locator('[data-act=hp][data-op=dmg]').click(); // edits must keep this gap
+}
+async function settle(seed) { // -> how many choices it changed
+  await more(); await page.locator('[data-act=editsetup]').click();
+  let total = 0;
+  for (let pass = 0; pass < 5; pass++) {
+    let changes = 0;
+    for (let n = 0; n < await page.locator('.setup .lvrow').count(); n++) {
+      await page.locator('.setup .lvrow').nth(n).locator('[data-act=lvedit]').click();
+      changes += await fillDialog(seed);
+      await page.locator('#dlg [data-act=closedlg]').click(); await frame();
+    }
+    total += changes;
+    if (!changes) { await page.locator('[data-act=setupdone]').click(); return total; }
+  }
+  throw Error('level edits never settled');
+}
+// the saved character (minus identity) with keys sorted and empty picks dropped, plus everything the sheet shows
+async function fingerprint() {
+  await page.waitForTimeout(400); // saves are debounced
+  const c = await page.evaluate(id => new Promise((res, rej) => {
+    const r = indexedDB.open('dnd-cm', 1);
+    r.onsuccess = () => { const q = r.result.transaction('characters').objectStore('characters').get(id); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); };
+  }), await page.evaluate(() => location.hash.slice(1)));
+  const canon = v => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object'
+    ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canon(v[k])]).filter(([, x]) => !(Array.isArray(x) && !x.some(y => y != null)))) : v);
+  const { classes, levels, featureChoices, profChoices, abilityChoices, feats, asiBonuses, skillProfs, hp } = c;
+  return { data: JSON.stringify(canon({ classes, levels, featureChoices, profChoices, abilityChoices, feats, asiBonuses, skillProfs, hp })), sheet: await page.locator('#app').innerText() };
+}
+const firstDiff = (a, b) => { const x = a.split('\n'), y = b.split('\n'), i = x.findIndex((l, k) => l !== y[k]); return i < 0 ? '(length)' : `line ${i}: ${JSON.stringify(x[i])} vs ${JSON.stringify(y[i])}`; };
+const jsonDiff = (a, b) => { const x = JSON.parse(a), y = JSON.parse(b); return Object.keys({ ...x, ...y }).filter(k => JSON.stringify(x[k]) !== JSON.stringify(y[k])).map(k => `${k}: ${JSON.stringify(x[k])} vs ${JSON.stringify(y[k])}`).join('\n    '); };
+
+await check('an earlier edit ripples: new subclass picks in the same Edit, unmet prerequisites flagged, stale expertise cleared', async () => {
+  await build({ race: RACES[0], steps: ['Fighter', 'Fighter'] }, 'ripple', false);
+  const lvl = async () => { await more(); await page.locator('[data-act=levelchooser]').click(); await page.locator('#dlg [data-act=lvlup]').click(); await choose(page.locator('#dlg select[data-path="@lu.hp"]'), 'avg'); };
+  await lvl(); await choose(page.locator('#dlg select[data-act=setsub]'), { label: 'Champion (PHB)' }); await done();
+  await lvl(); await page.locator('#dlg [data-path="@lu.feat"]').check(); await done(); await pick('grappler', /^Grappler/);
+  await page.locator('#dlg [data-act=closedlg]').click();
+  await more(); await page.locator('[data-act=editsetup]').click();
+  await page.locator('.setup .lvrow').nth(2).locator('[data-act=lvedit]').click();
+  await choose(page.locator('#dlg select[data-act=setsub]'), { label: 'Battle Master (PHB)' });
+  assert.equal(await page.locator('#dlg select[data-path^="featureChoices.of:Fighter:sub:Maneuvers"]').count(), 3, "the new subclass's picks join the open Edit");
+  await page.locator('#dlg [data-act=closedlg]').click();
+  await choose(page.locator('[data-act=assign][data-a=str]'), { index: 5 }); // STR 8: Grappler needs 13
+  await page.locator('[data-act=setupdone]').click();
+  await page.locator('.namewrap [data-act=openpicks]').click();
+  assert.match(await page.locator('#dlg').innerText(), /Grappler: prerequisite no longer met/);
+  await page.keyboard.press('Escape');
+
+  await build({ race: RACES[0], steps: ['Rogue'] }, 'ripple', false);
+  await more(); await page.locator('[data-act=editsetup]').click();
+  await page.locator('.setup .lvrow').first().locator('[data-act=lvedit]').click();
+  const skill = i => page.locator(`#dlg select[data-path="profChoices.skill:class.${i}"]`), exp = i => page.locator(`#dlg select[data-path^="profChoices.expertise:"][data-path$=".${i}"]`);
+  for (const [i, v] of ['stealth', 'perception', 'acrobatics', 'deception'].entries()) await choose(skill(i), v);
+  await choose(exp(0), 'stealth'); await choose(exp(1), 'perception');
+  await choose(skill(0), 'investigation'); // stealth no longer proficient: its expertise goes
+  assert.equal(await exp(0).inputValue(), '');
+  assert.match(await exp(0).getAttribute('class'), /unset/);
+  await page.locator('#dlg [data-act=closedlg]').click();
+  assert.doesNotMatch(await bdText('skill.stealth'), /Expertise|Proficiency/);
+  await page.locator('[data-act=setupdone]').click();
+});
+
+for (let f = 0; f < FUZZ; f++) {
+  const seed = SEED0 + f, spec = randomSpec(seed);
+  await check(`random build ${seed} (${spec.race[0]}, ${spec.steps.join(' ')}): edited afterwards = chosen in one go; undo restores`, async () => {
+    await build(spec, `${seed}final`, false); await settle(`${seed}final`);
+    const a = await fingerprint();
+    if (spec.steps.length < 20) {
+      await more(); await page.locator('[data-act=levelchooser]').click(); await page.locator('#dlg [data-act=lvlup]').first().click();
+      await levelStage(`${seed}extra`, true);
+      await more(); await page.locator('[data-act=editsetup]').click();
+      await page.locator('.setup .lvrow').last().locator('[data-act=lvundo]').click();
+      await page.locator('[data-act=setupdone]').click();
+      const u = await fingerprint();
+      assert.ok(u.data === a.data, `undo left the character changed:\n    ${jsonDiff(a.data, u.data)}`);
+      assert.ok(u.sheet === a.sheet, `undo left the sheet changed: ${firstDiff(a.sheet, u.sheet)}`);
+    }
+    await build(spec, `${seed}first`, true);
+    const edits = await settle(`${seed}final`), b = await fingerprint();
+    console.log(`    build B needed ${edits} edits`);
+    assert.ok(edits > 0, 'build B was never edited: the comparison proves nothing');
+    assert.ok(b.data === a.data, `edited build differs:\n    ${jsonDiff(a.data, b.data)}`);
+    assert.ok(b.sheet === a.sheet, `edited build's sheet differs: ${firstDiff(a.sheet, b.sheet)}`);
+  });
+}
+if (FUZZ) console.log(`random builds: seeds ${SEED0}…${SEED0 + FUZZ - 1} (E2E_SEED=${SEED0} replays them)`);
 
 await check('no uncaught page errors', async () => assert.deepEqual(pageErrors, []));
 

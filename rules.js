@@ -48,22 +48,24 @@ export function parseDice(expr) {
 // adv/dis apply to the first d20 term; crit doubles dice.
 export function roll(expr, { adv = false, dis = false, crit = false } = {}, rng = Math.random) {
   const d = f => 1 + Math.floor(rng() * f);
-  let total = 0, d20 = null, first20 = true;
-  const out = [];
+  let total = 0, d20 = null, first20 = true, flat = 0;
+  const out = [], dice = [];
   for (const t of parseDice(expr)) {
-    if (t.flat != null) { total += t.sign * t.flat; out.push(signed(t.sign * t.flat)); continue; }
+    if (t.flat != null) { total += t.sign * t.flat; flat += t.sign * t.flat; out.push(signed(t.sign * t.flat)); continue; }
     if (t.f === 20 && t.n === 1 && first20 && adv !== dis) {
       first20 = false;
       const a = d(20), b = d(20), v = adv ? Math.max(a, b) : Math.min(a, b);
       d20 = v; total += t.sign * v; out.push(`d20(${a}|${b}→${v})`);
+      dice.push({ f: 20, v, sign: t.sign }, { f: 20, v: a + b - v, sign: t.sign, drop: true });
       continue;
     }
     const n = t.n * (crit ? 2 : 1), rs = Array.from({ length: n }, () => d(t.f));
     if (t.f === 20 && t.n === 1 && first20) { first20 = false; d20 = rs[0]; }
     total += t.sign * rs.reduce((a, b) => a + b, 0);
+    for (const v of rs) dice.push({ f: t.f, v, sign: t.sign });
     out.push(`${t.sign < 0 ? '-' : ''}${n}d${t.f}(${rs.join(',')})`);
   }
-  return { total, text: out.join(' '), d20 };
+  return { total, text: out.join(' '), d20, flat, dice }; // flat: the fixed bonus part of total; dice: each die, drop = the one advantage/disadvantage discards
 }
 
 // "8d6","1d6","1d6" -> "10d6"; keeps different dice separate.
@@ -377,7 +379,8 @@ export function computeCharacter(c, R, effects) {
   for (const a of ABIL) {
     const s = add(stat(), 'Base score', +c.baseScores?.[a] || 0);
     for (const [k, v, label] of grants) if (k === a) add(s, label, v);
-    add(s, 'ASI / other', +c.asiBonuses?.[a] || 0);
+    // each level-up's ASI (c.levels[].asi), plus older points not tied to a level
+    add(s, 'ASI / other', (+c.asiBonuses?.[a] || 0) + (c.levels || []).reduce((n, e) => n + (e.asi || []).filter(x => x === a).length, 0));
     // a transformation (Wild Shape) swaps scores but never your own hit point maximum: remember CON without it
     if (a === 'con') vars.ownCon = mod(apply(structuredClone(s), ['ability.con'], effects.filter(e => !e.transform), vars).total);
     apply(s, [`ability.${a}`], effects, vars);
@@ -407,7 +410,8 @@ export function computeCharacter(c, R, effects) {
 
   // skills + passives
   for (const [sk, a] of Object.entries(SKILLS)) {
-    const manual = c.skillProfs?.[sk] || 0, derived = pg.expertise[sk] ? 2 : pg.skill[sk] ? 1 : 0, p = Math.max(manual, derived);
+    // expertise only doubles a skill you're proficient in (a pick made before an earlier choice changed may no longer be)
+    const manual = c.skillProfs?.[sk] || 0, prof = pg.skill[sk] || manual >= 1, derived = pg.expertise[sk] && prof ? 2 : pg.skill[sk] ? 1 : 0, p = Math.max(manual, derived);
     const s = add(stat(), `${a.toUpperCase()} mod`, M(a));
     if (p) add(s, p === 2 ? `Expertise (${why(pg.expertise[sk], manual === 2)})` : `Proficiency (${why(pg.skill[sk], manual === 1)})`, pb.total * p);
     apply(s, ['check.all', `check.${a}`, `skill.all`, `skill.${sk}`], effects, vars, { ...flags, nonProficient: !p });

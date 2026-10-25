@@ -45,12 +45,34 @@ const newChar = () => ({
   inventory: [], currency: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 }, feats: [], optionalFeatures: [], resources: [],
   actions: [{ id: uid(), kind: 'custom', name: 'Unarmed Strike', group: 'action', ability: 'str', prof: true, addMod: true, unarmed: true, dmgType: 'bludgeoning' }],
   featureChoices: {}, featureUses: {}, actionSlots: {}, shape: null, companions: [], kitChoices: {}, bgKit: null,
+  // one entry per level-up, in order: { cls, asi?: ['dex', 'dex'], feat?: ref | 'owed' } (hit points stay in classes[].hpRolls)
+  levels: [],
   overrides: {}, notes: { personality: '', ideals: '', bonds: '', flaws: '', backstory: '', other: '' },
 });
 // characters saved before setup/ability methods existed: treat as already set up, scores typed by hand
 // older characters kept the unarmed strike as a flat "+1" custom action; mark it so die upgrades (Unarmed Fighting, claws…) reach it
 const unarmedV = a => (a.kind === 'custom' && !a.unarmed && !a.dice && /^unarmed strike$/i.test(a.name || '') ? { ...a, unarmed: true, dmgBonus: String(a.dmgBonus) === '1' ? '' : a.dmgBonus } : a);
-const normalize = c => { const n = { ...newChar(), setupDone: !!c.classes?.length, abilityMethod: 'manual', profV: 0, ...c }; n.actions = n.actions.map(unarmedV); return n; };
+const normalize = c => {
+  const n = { ...newChar(), setupDone: !!c.classes?.length, abilityMethod: 'manual', profV: 0, ...c };
+  n.actions = n.actions.map(unarmedV);
+  if (!n.classes.every(k => n.levels.filter(e => e.cls === k.name).length === k.level) || n.levels.some(e => !n.classes.some(k => k.name === e.cls))) n.levels = guessLevels(n);
+  return n;
+};
+// characters without a level log: each class's levels in turn; ASI points already given are handed to the ASI levels, 2 each
+function guessLevels(c) {
+  const left = { ...c.asiBonuses }, levels = [];
+  for (const k of c.classes) {
+    const cls = D && find('class', k.name, k.source);
+    for (let l = 1; l <= k.level; l++) {
+      const asi = cls && classFeatures(cls, l).some(x => x.level === l && x.name === 'Ability Score Improvement')
+        ? ABIL.flatMap(a => Array(Math.max(0, left[a] || 0)).fill(a)).slice(0, 2) : [];
+      asi.forEach(a => left[a]--);
+      levels.push({ cls: k.name, ...(asi?.length && { asi }) });
+    }
+  }
+  c.asiBonuses = left;
+  return levels;
+}
 // v0 characters stored race/background skills as manual toggles; those are now derived, so drop the duplicates
 // v1 characters kept other proficiencies/languages as free text; move that text into notes so nothing is lost
 function migrateProfs() {
@@ -62,8 +84,31 @@ function migrateProfs() {
   save();
 }
 
+// after every edit, so an earlier change (a subclass swapped, a level undone, a skill re-picked) leaves nothing stale behind:
+// picks the rules no longer offer are dropped, lists that shrank are cut back, values no longer among the options are cleared
+function prunePicks() {
+  if (!cur || !D) return;
+  let R = resolve(cur);
+  const groups = new Map(R.choiceGroups.map(g => [g.key, g])), profs = new Map(profSources(R).filter(s => s.count).map(s => [s.key, s]));
+  const fix = (store, key, n, ok) => { if (Array.isArray(store[key])) store[key] = store[key].slice(0, n).map(v => (v && ok(v) ? v : null)); };
+  for (const key of Object.keys(cur.featureChoices)) {
+    const g = groups.get(key);
+    if (!g) delete cur.featureChoices[key]; else fix(cur.featureChoices, key, g.count, v => g.options.some(o => o.value === v));
+  }
+  for (const key of Object.keys(cur.profChoices)) {
+    const s = profs.get(key);
+    if (!s) delete cur.profChoices[key]; else if (s.from) fix(cur.profChoices, key, s.count, v => s.from.includes(v));
+  }
+  for (const key of Object.keys(cur.abilityChoices)) if (key.startsWith('feat:') && !R.feats.some(f => f.key === key)) delete cur.abilityChoices[key];
+  // expertise needs proficiency, which the picks above decide
+  R = resolve(cur);
+  const stats = computeCharacter(cur, R, gatherEffects(cur, R, P)).stats;
+  for (const [key, s] of profs) if (!s.from) fix(cur.profChoices, key, s.count, v => profOptions(s, stats).includes(v));
+}
+
 function save() {
   if (!cur) return;
+  prunePicks();
   snap();
   clearTimeout(saveT);
   const c = cur;
@@ -115,7 +160,7 @@ function resolve(c) {
         if (!count) continue;
         const key = `of:${k.cls.name}:${who}:${p.name}`;
         choiceGroups.push({ key, label: `${p.name} (${k.cls.name})`, count, options: list('optionalfeature').filter(o => o.featureType.some(t => p.featureType.includes(t)))
-          .map(o => ({ value: `${o.name}|${o.source}`, label: o.name, title: o.prerequisite ? 'Has prerequisites' : '' })) });
+          .map(o => ({ value: `${o.name}|${o.source}`, label: o.name, x: o })) });
         for (const ref of (choices[key] || []).slice(0, count)) {
           const [n, src] = String(ref).split('|'), x = n && find('optionalfeature', n, src);
           if (x) sources.push({ key: `opt:${x.name}|${x.source}`, name: x.name, kind: 'feature', cls: k.cls.name, group: 'Class options', data: x, cat: 'optionalfeature' });
@@ -238,7 +283,7 @@ function compute() {
 }
 
 // ---------- rendering ----------
-const opt = (v, label, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(label ?? v)}</option>`;
+const opt = (v, label, sel, dis) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}${dis ? ' disabled' : ''}>${esc(label ?? v)}</option>`;
 const bd = (k, label) => `<button class=lbl data-act=bd data-k="${esc(k)}">${label}</button>`;
 const marks = s => `${s.adv.length ? '<i class=adv title="Advantage">A</i>' : ''}${s.dis.length ? '<i class=dis title="Disadvantage">D</i>' : ''}`;
 const r20 = (k, label, s = S.stats[k]) => `<button class=num data-act=r20 data-k="${esc(k)}" data-label="${esc(label)}">${signed(s.total)}${s.dice.map(d => `<small>+${d}</small>`).join('')}</button>${marks(s)}`;
@@ -396,8 +441,9 @@ function statusView() {
   const shape = S.R.shape, canShape = S.featureRes.some(r => r.name === 'Wild Shape');
   const conds = list('condition');
   const main = S.R.classes.filter(k => k.cls).sort((a, b) => b.level - a.level)[0], art = cur.image || (main && classArt(main.cls, main.sub));
+  const open = cur.setupDone ? pendingPicks().length : 0; // during setup its panel lists them
   return `<section class="card status${art ? ' art' : ''}"${art ? ` style="--art: url('${esc(cssUrl(art))}')"` : ''}>
-    <div class=namewrap><h2 class=charname>${esc(cur.name)}</h2>${menu(`<button data-act=rename>Rename…</button><button data-act=image>Change image…</button><button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}<button data-act=addres>+ Resource</button>`)}</div>
+    <div class=namewrap><h2 class=charname>${esc(cur.name)}</h2>${open ? `<button class="icon pickwarn" data-act=openpicks title="Choices still to make" aria-label="${open} choice${open > 1 ? 's' : ''} still to make">⚠</button>` : ''}${menu(`<button data-act=rename>Rename…</button><button data-act=image>Change image…</button><button data-act=levelchooser>Level up</button>${cur.setupDone ? '<button data-act=editsetup>Edit character</button>' : ''}<button data-act=addres>+ Resource</button>`)}</div>
     ${shape ? `<div class=shape><span class=grow>${IC.shape} <b>Wild Shape: ${link('creature', shape)}</b> <small class=muted>CR ${esc(shape.cr?.cr ?? shape.cr)} · ${esc(speedText(shape.speed))}</small></span>
       <button data-act=revert>Revert</button></div>` : ''}
     <div class=hprow>
@@ -509,15 +555,15 @@ function abilityUI() {
     return `<tr><th><span class=full>${ABIL_NAME[a]}</span><span class=abbr>${a.toUpperCase()}</span></th><td class=ctl>${ctl(a)}</td><td class=muted>${bonus ? signed(bonus) : ''}</td>
       <td><button class=lbl data-act=bd data-k="ability.${a}">${st.total}</button></td><td><b>${signed(mod(st.total))}</b></td></tr>`;
   }).join('');
-  return `<div class=seg>${Object.entries(METHODS).map(([k, l]) => `<button class="${m === k ? 'on' : ''}" data-act=method data-m=${k}>${METHOD_IC[k]}${l}</button>`).join('')}</div>
+  return `<div class=abwrap><div class=seg>${Object.entries(METHODS).map(([k, l]) => `<button class="${m === k ? 'on' : ''}" data-act=method data-m=${k}>${METHOD_IC[k]}${l}</button>`).join('')}</div>
     <p class=small>${{
       array: 'Pick a value for each ability. Choosing one already in use swaps the two.',
       pointbuy: `Raise scores from 8 (max 15). <b>${left}</b> of 27 points left.`,
       roll: `${cur.rolledPool ? `Rolled: <b>${cur.rolledPool.join(', ')}</b>. Assign them like the standard array.` : ''} <button data-act=rollpool>${cur.rolledPool ? 'Reroll' : 'Roll'} 4d6 ×6</button>`,
       manual: 'Type each base score.',
     }[m]}</p>
-    <div class=abwrap><table class=abtable><tr><th></th><th>Base</th><th>Bonus</th><th>Score</th><th>Mod</th></tr>${rows}</table></div>
-    <p class=note>Bonus = race, feats and ASIs; tap a score for its breakdown.</p>`;
+    <table class=abtable><tr><th></th><th>Base</th><th>Bonus</th><th>Score</th><th>Mod</th></tr>${rows}</table>
+    <p class=note>Bonus = race, feats and ASIs; tap a score for its breakdown.</p></div>`;
 }
 
 function setupView() {
@@ -532,9 +578,9 @@ function setupView() {
   };
   const classes = R.classes.map((k, i) => {
     if (!k.cls) return `<div class=classrow>${esc(k.name)} <span class=warn>not in rules data</span></div>`;
-    const sl = subclassLevel(k.cls), subsOf = subclassesOf(k.cls);
-    return `<div class=classrow>${link('class', k.cls)} <button data-act=lvl data-i=${i} data-d=-1 aria-label="Lower level">−</button><b>${k.level}</b><button data-act=lvl data-i=${i} data-d=1 aria-label="Raise level">+</button>
-      ${k.level >= sl ? `<select data-act=setsub data-i=${i}>${opt('', `— ${k.cls.subclassTitle || 'Subclass'} —`)}${subsOf.map((s, j) => opt(j, `${s.name} (${s.source})`, k.sub === s)).join('')}</select>
+    const sl = subclassLevel(k.cls);
+    return `<div class=classrow>${link('class', k.cls)} <b>${k.level}</b><button data-act=lvlup data-i=${i} ${S.level >= 20 ? 'disabled' : ''} aria-label="Level up ${esc(k.cls.name)}">+</button>
+      ${k.level >= sl ? `${subclassSelect(k.cls, k.sub, i)}
         ${k.sub ? info('subclass', k.sub) : ''}`
         : `<small class=muted>${esc(k.cls.subclassTitle || 'Subclass')} at level ${sl}</small>`}</div>`;
   }).join('');
@@ -561,7 +607,7 @@ function setupView() {
       <div class=field><span>Background</span><div class=inline><button data-act=pick data-what=background>${R.background ? esc(R.background.name) : 'Choose…'}</button>
         ${R.background ? info('background', R.background) : ''}</div>${hint(['background'])}${R.background ? kitView(R.background) : ''}</div>
       <div class=field><span>Classes</span>${classes}<div class=inline><button data-act=pick data-what=class>+ ${cur.classes.length ? 'Multiclass' : 'Add class'}</button></div>
-        ${hint(['class', 'mc'])}</div>
+        ${hint(['class', 'mc'])}${levelsView()}</div>
     </div><div class=field><span>Ability scores</span>${abilityUI()}</div></div>
   </section>`;
 }
@@ -570,20 +616,53 @@ function setupView() {
 // once every pick in a block is made, it folds behind "View selection…"
 const foldChoices = (key, html, done) => (!html || !done ? html : `<details class=fold data-key="${esc(key)}" ${ui.open.has(key) ? 'open' : ''}><summary></summary>${html}</details>`);
 const allPicked = (picks, n) => Array.from({ length: n }, (_, i) => picks?.[i]).every(Boolean);
+const picksOk = (picks, n, opts) => Array.from({ length: n }, (_, i) => picks?.[i]).every(v => v && opts.includes(v));
+// a proficiency pick's options right now: its list, or for expertise any skill you're proficient in
+const profOptions = (s, stats = S.stats) => s.from || Object.keys(SKILLS).filter(k => stats[`skill.${k}`].proficient >= 1);
+const profDone = s => picksOk(cur.profChoices[s.key], s.count, profOptions(s));
+const optionOk = o => !o.x || prereqMet(o.x);
+const groupDone = g => picksOk(cur.featureChoices[g.key], g.count, g.options.filter(optionOk).map(o => o.value));
 
 function profChoiceRows(filter) {
   const srcs = profSources(S.R).filter(s => s.count && filter(s));
-  return foldChoices(`ch:${srcs.map(s => s.key).join()}`, srcs.map(s => {
-    const picks = cur.profChoices[s.key] || [];
-    const from = s.from || Object.keys(SKILLS).filter(k => S.stats[`skill.${k}`].proficient >= 1); // expertise: any proficient skill
-    const label = x => (s.kind === 'save' ? ABIL_NAME[x] : titleCase(x));
-    const has = x => (s.kind === 'save' ? S.stats[`save.${x}`].proficient : s.kind === 'skill' || s.kind === 'expertise'
-      ? S.stats[`skill.${x}`].proficient >= (s.kind === 'expertise' ? 2 : 1) : !!S.profs[s.kind][x]);
-    const what = { expertise: 'expertise', save: 'saving throw', skill: 'skill', lang: 'language', tool: 'tool', weapon: 'weapon', armor: 'armor' }[s.kind] + (s.count > 1 && s.kind !== 'armor' ? 's' : '');
-    return `<div class=choice><span>${esc(s.label)}: choose ${s.count} ${what}</span>${Array.from({ length: s.count }, (_, i) => `<select data-path="profChoices.${s.key}.${i}" class="${picks[i] ? '' : 'unset'}">
-      ${opt('', 'Choose…')}${from.map(x => opt(x, `${label(x)}${has(x) && picks[i] !== x ? ' ✓' : ''}`, picks[i] === x)).join('')}</select>`).join('')}</div>`;
-  }).join(''), srcs.every(s => allPicked(cur.profChoices[s.key], s.count)));
+  return foldChoices(`ch:${srcs.map(s => s.key).join()}`, srcs.map(profChoiceRow).join(''), srcs.every(profDone));
 }
+function profChoiceRow(s) {
+  const picks = cur.profChoices[s.key] || [];
+  const from = profOptions(s);
+  const label = x => (s.kind === 'save' ? ABIL_NAME[x] : titleCase(x));
+  const has = x => (s.kind === 'save' ? S.stats[`save.${x}`].proficient : s.kind === 'skill' || s.kind === 'expertise'
+    ? S.stats[`skill.${x}`].proficient >= (s.kind === 'expertise' ? 2 : 1) : !!S.profs[s.kind][x]);
+  const what = { expertise: 'expertise', save: 'saving throw', skill: 'skill', lang: 'language', tool: 'tool', weapon: 'weapon', armor: 'armor' }[s.kind] + (s.count > 1 && s.kind !== 'armor' ? 's' : '');
+  return `<div class=choice><span>${esc(s.label)}: choose ${s.count} ${what}</span>${Array.from({ length: s.count }, (_, i) => `<select data-path="profChoices.${s.key}.${i}" class="${from.includes(picks[i]) ? '' : 'unset'}">
+    ${opt('', 'Choose…')}${from.map(x => opt(x, `${label(x)}${has(x) && picks[i] !== x ? ' ✓' : ''}`, picks[i] === x)).join('')}</select>`).join('')}</div>`;
+}
+const subclassSelect = (cls, sub, i) => `<select data-act=setsub data-i=${i} class="${sub ? '' : 'unset'}">${opt('', `— ${cls.subclassTitle || 'Subclass'} —`)}${subclassesOf(cls).map((s, j) => opt(j, `${s.name} (${s.source})`, sub === s)).join('')}</select>`;
+
+// every pick the character has, as [key, html, done]: subclass, feature options, proficiency and ability picks, feats taken instead of an ASI
+// the open ones feed the ⚠ next to the name; the picks overlay (see openPicks) shows them
+function allPicks() {
+  const R = S.R, out = [], row = (label, html) => `<div class=choice><span>${esc(label)}</span>${html}</div>`;
+  R.classes.forEach((k, i) => { if (k.cls && k.level >= subclassLevel(k.cls) && subclassesOf(k.cls).length) out.push([`sub:${i}`, row(`${k.cls.name}: ${k.cls.subclassTitle || 'Subclass'}`, subclassSelect(k.cls, k.sub, i)), !!k.sub]); });
+  for (const g of R.choiceGroups) if (g.options.length) out.push([`fc:${g.key}`, featureChoiceRow(g), groupDone(g)]);
+  for (const s of profSources(R)) if (s.count && s.from?.length !== 0) out.push([`pc:${s.key}`, profChoiceRow(s), profDone(s)]);
+  // feats whose prerequisite an edit took away (an ASI moved, a race changed): keep or remove, the player decides
+  for (const f of R.feats) if (!prereqMet(f.data)) out.push([`prq:${f.key}`, row(`${f.data.name}: prerequisite no longer met`, `<button class=danger data-act=delsource data-k="${esc(f.key)}">Remove feat</button>`), false]);
+  for (const [k, x] of [['race', R.subrace?.overwrite?.ability ? null : R.race], ['subrace', R.subrace], ...R.feats.map(f => [f.key, f.data])])
+    if (abilityChoiceSpec(x)) out.push([`ab:${k}`, abilityChoiceUI(k, x), allPicked(cur.abilityChoices[k], abilityChoiceSpec(x).weights.length)]);
+  const owed = cur.levels.filter(e => e.feat === 'owed').length;
+  if (owed) out.push(['feat', row(`Feat instead of an ASI${owed > 1 ? ` (${owed})` : ''}`, '<button data-act=pick data-what=feat>Choose feat…</button>'), false]);
+  // what each level-up chose: hit points (not the first level: always the maximum) and the ASI's two +1s
+  cur.levels.forEach((e, n) => {
+    const ci = cur.classes.findIndex(k => k.name === e.cls), cls = R.classes[ci]?.cls, l = classLevelAt(n), v = cur.classes[ci]?.hpRolls[l - 1], f = cls?.hd?.faces || 8;
+    if (cls && !(ci === 0 && l === 1)) out.push([`hp:${n}`, row(`${e.cls} ${l}: hit points`, `<select data-act=lvhp data-c=${ci} data-l=${l - 1}>${opt('', `Average (${f / 2 + 1})`, v == null)}
+      ${Array.from({ length: f }, (_, r) => opt(r + 1, `Rolled ${r + 1}`, v === r + 1)).join('')}</select>`), true]);
+    if (e.asi) out.push([`asi:${n}`, row(`${e.cls} ${l}: Ability Score Improvement`, [0, 1].map(j => `<select data-act=lvasi data-n=${n} data-j=${j} class="${e.asi[j] ? '' : 'unset'}">
+      ${opt('', '+1 to…')}${ABIL.map(a => opt(a, a.toUpperCase(), e.asi[j] === a)).join('')}</select>`).join('')), true]);
+  });
+  return out;
+}
+const pendingPicks = () => allPicks().filter(p => !p[2]);
 
 function levelChooser() {
   if (!cur.classes.length) return '<h2>Level up</h2><p>Choose a class in Character setup first.</p><button data-act=editsetup>Open setup</button>';
@@ -721,11 +800,13 @@ function featuresView() {
 function choicesView() {
   const gs = S.R.choiceGroups;
   if (!gs.length) return '';
-  return foldChoices('ch:features', `<div class=choices><h4>${IC.choices}Choices</h4>${gs.map(g => {
-    const picks = cur.featureChoices[g.key] || [];
-    return `<div class=choice><span>${esc(g.label)}: choose ${g.count}</span>${Array.from({ length: g.count }, (_, i) => `<select data-path="featureChoices.${g.key}.${i}" class="${picks[i] ? '' : 'unset'}">
-      ${opt('', 'Choose…')}${g.options.map(o => opt(o.value, `${o.label}${picks.includes(o.value) && picks[i] !== o.value ? ' ✓' : ''}`, picks[i] === o.value)).join('')}</select>`).join('')}</div>`;
-  }).join('')}</div>`, gs.every(g => allPicked(cur.featureChoices[g.key], g.count)));
+  return foldChoices('ch:features', `<div class=choices><h4>${IC.choices}Choices</h4>${gs.map(featureChoiceRow).join('')}</div>`, gs.every(groupDone));
+}
+function featureChoiceRow(g) {
+  const picks = cur.featureChoices[g.key] || [], ok = new Set(g.options.filter(optionOk).map(o => o.value));
+  return `<div class=choice><span>${esc(g.label)}: choose ${g.count}</span>${Array.from({ length: g.count }, (_, i) => `<select data-path="featureChoices.${g.key}.${i}" class="${ok.has(picks[i]) ? '' : 'unset'}">
+    ${opt('', 'Choose…')}${g.options.map(o => opt(o.value, `${o.label}${picks.includes(o.value) && picks[i] !== o.value ? ' ✓' : ''}${ok.has(o.value) ? '' : ' (prerequisite not met)'}`,
+      picks[i] === o.value, !ok.has(o.value) && picks[i] !== o.value)).join('')}</select>`).join('')}</div>`;
 }
 
 function companionsView() {
@@ -809,9 +890,15 @@ const PICK = {
   class: { title: 'Add class', items: () => list('class').filter(c => !cur.classes.some(k => k.name === c.name)).map(x => ({ x, cat: 'class' })),
     pick: x => { cur.classes.push({ name: x.name, source: x.source, level: 0, hpRolls: [], subclass: null }); levelUp(cur.classes.length - 1); } },
   feat: { title: 'Add feat', items: () => list('feat').map(x => ({ x, cat: 'feat' })), has: x => cur.feats.some(f => f.name === x.name && f.source === x.source),
-    pick: x => { cur.feats.push(refOf(x)); } },
+    sub: x => `${x.source}${prereqMet(x) ? '' : ' · prerequisite not met'}`,
+    pick: x => {
+      cur.feats.push(refOf(x));
+      const owed = cur.levels.findLast(e => e.feat === 'owed');
+      if (owed) owed.feat = refOf(x);
+      if (ui.picks) ui.dlg = picksView; // back to the remaining choices (the feat's own picks among them)
+    } },
   optfeature: { title: 'Add class option', items: () => list('optionalfeature').map(x => ({ x, cat: 'optionalfeature' })),
-    sub: x => `${x.featureType.map(t => OPT_TYPE[t] || t).join(', ')} · ${x.source}`, has: x => cur.optionalFeatures.some(f => f.name === x.name && f.source === x.source),
+    sub: x => `${x.featureType.map(t => OPT_TYPE[t] || t).join(', ')} · ${x.source}${prereqMet(x) ? '' : ' · prerequisite not met'}`, has: x => cur.optionalFeatures.some(f => f.name === x.name && f.source === x.source),
     pick: x => { cur.optionalFeatures.push(refOf(x)); } },
   item: { title: 'Add item', items: () => [...list('baseitem').map(x => ({ x, cat: 'baseitem' })), ...list('item').map(x => ({ x, cat: 'item' })), ...list('magicvariant').map(x => ({ x, cat: 'magicvariant' }))],
     sub: (x, cat) => `${cat === 'magicvariant' ? 'Magic variant — pick a base item' : itemType(x)}${x.rarity && x.rarity !== 'none' ? ' · ' + x.rarity : ''} · ${x.source}`,
@@ -1008,26 +1095,127 @@ function addSpellAction(s) {
 }
 
 function levelUp(i) {
-  ui.lu = { i, asi: {}, feat: false };
+  // picks already open stay optional; S still predates a class just added, so its first-level picks count as new
+  ui.lu = { i, asi: {}, feat: false, before: new Set(pendingPicks().map(p => p[0])) };
   openDlg(() => {
     const k = cur.classes[i], cls = find('class', k.name, k.source);
     if (!cls) return '<p>Class not found.</p>';
     const next = k.level + 1, f = cls.hd?.faces || 8, first = i === 0 && k.level === 0, sub = findSubclass(cls, k.subclass);
     const feats = [...classFeatures(cls, next).filter(x => x.level === next), ...(sub ? subclassFeatures(cls, sub, next).filter(x => x.level === next) : [])];
+    const asi = feats.some(x => x.name === 'Ability Score Improvement'), subLvl = next === subclassLevel(cls) && subclassesOf(cls).length;
+    // Done takes the level once every choice on this screen is made (the first level always takes the maximum hit die)
+    const hp = first ? 'max' : ui.lu.hp, ready = hp && !(asi && !ui.lu.feat && asiLeft()) && !(subLvl && !sub);
     return `<h2>${esc(cls.name)} ${k.level} → ${next}</h2>
-      ${first ? `<p>First character level: maximum hit die (${f}).</p><button class=primary data-act=lu data-v=max>Confirm level ${next}</button>`
-        : `<p>Hit points: <button class=primary data-act=lu data-v=avg>Average (${f / 2 + 1})</button> <button class=primary data-act=lu data-v=roll>Roll d${f}</button></p>`}
+      <div class=choice><span>Hit points</span>${first ? `<b>Maximum hit die (${f})</b>`
+        : `<select data-path="@lu.hp" class="${hp ? '' : 'unset'}">${opt('', 'Choose…')}${opt('avg', `Average (${f / 2 + 1})`, hp === 'avg')}${opt('roll', `Roll d${f}`, hp === 'roll')}</select>`}</div>
+      ${subLvl ? `<div class=choice><span>${esc(cls.subclassTitle || 'Subclass')}</span>${subclassSelect(cls, sub, i)}</div>` : ''}
+      ${asi ? asiView() : ''}
       <h3>New at level ${next}</h3><ul>${feats.map(x => `<li><a class=ref data-tag=${x.subclassShortName ? 'subclassFeature' : 'classFeature'} data-name="${esc(x.name)}" data-src="">${esc(x.name)}</a></li>`).join('') || '<li>No new features.</li>'}</ul>
-      ${next === subclassLevel(cls) ? `<div class=field><span>${esc(cls.subclassTitle || 'Subclass')}</span><select data-act=setsub data-i=${i}>${opt('', '— choose —')}
-        ${subclassesOf(cls).map((s, j) => opt(j, `${s.name} (${s.source})`, sub === s)).join('')}</select></div>` : ''}
-      ${feats.some(x => x.name === 'Ability Score Improvement') ? asiView() : ''}`;
+      <div class=btns><button class=primary data-act=lu data-v="${hp || ''}" ${ready ? '' : 'disabled'}>Done</button></div>`;
   });
+}
+// ASI points still to spend: 2, less what's spent and what no score can take (max 20)
+const asiLeft = () => Math.min(2 - Object.values(ui.lu.asi).reduce((a, b) => a + b, 0), ABIL.reduce((n, a) => n + Math.max(0, 20 - S.scores[a] - (ui.lu.asi[a] || 0)), 0));
+
+// ---------- level history (setup panel): what each level-up gave; any level can be edited, the latest undone ----------
+const classLevelAt = n => cur.levels.slice(0, n + 1).filter(e => e.cls === cur.levels[n].cls).length; // the class level entry n reached
+function levelsView() {
+  if (!cur.levels.length) return '';
+  return `<div class=levels><small class=muted>Level-ups</small>${cur.levels.map((e, n) => {
+    const ci = cur.classes.findIndex(k => k.name === e.cls), k = S.R.classes[ci], l = classLevelAt(n), f = k?.cls?.hd?.faces || 8, v = k?.hpRolls[l - 1];
+    const asi = e.asi && ABIL.filter(a => e.asi.includes(a)).map(a => `${a.toUpperCase()} +${e.asi.filter(x => x === a).length}`).join(', ');
+    const parts = [`HP ${ci === 0 && l === 1 ? `${f} (max)` : v == null ? `${f / 2 + 1} (avg)` : `${v} (rolled)`}`, k?.cls && l === subclassLevel(k.cls) && k.sub?.name,
+      asi && `ASI ${asi}`, e.feat && `Feat: ${e.feat === 'owed' ? 'not chosen' : e.feat.name}`,
+      // the sheet's features of that level: unchosen options (Totem Spirit's other animals) are already left out
+      ...S.R.sources.filter(s => /^[cs]f:/.test(s.key) && s.cls === e.cls && s.level === l && s.name !== 'Ability Score Improvement' && s.name !== k?.sub?.name).map(s => s.name)];
+    return `<div class=lvrow><b>${n + 1}</b><span class=grow>${esc(e.cls)} ${l} <small class=muted>${esc(parts.filter(Boolean).join(' · '))}</small></span>
+      <button data-act=lvedit data-n=${n}>Edit…</button>${n === cur.levels.length - 1 ? `<button class=danger data-act=lvundo>Undo</button>` : ''}</div>`;
+  }).join('')}</div>`;
+}
+// pick keys (with counts) the rules offer a character: feature options, proficiency picks, subclass
+function pickCounts(c) {
+  const R = resolve(c);
+  return new Map([...R.choiceGroups.map(g => [`fc:${g.key}`, g.count]), ...profSources(R).filter(s => s.count).map(s => [`pc:${s.key}`, s.count]),
+    ...R.classes.flatMap((k, i) => (k.cls && k.level >= subclassLevel(k.cls) ? [[`sub:${i}`, 1]] : []))]);
+}
+// the picks level n brought: what its class offers at that level but not the one before (a grown count counts too),
+// its hit points and ASI, the feat taken instead and that feat's own picks
+function levelKeys(n) {
+  const e = cur.levels[n], ci = cur.classes.findIndex(k => k.name === e.cls), l = classLevelAt(n);
+  const at = lv => pickCounts({ ...cur, classes: cur.classes.map((k, j) => (j === ci ? { ...k, level: lv } : k)) });
+  const now = at(l), prev = at(l - 1), keys = new Set([`hp:${n}`, `asi:${n}`]), src = ci ? `mc:${e.cls}` : 'class';
+  for (const [key, c] of now) if (c > (prev.get(key) || 0) || (l === 1 && key.startsWith('pc:') && key.split(':').slice(2).join(':').split('#')[0] === src)) keys.add(key);
+  if (e.feat === 'owed') keys.add('feat');
+  else if (e.feat) for (const [key] of allPicks()) if (key.includes(`feat:${e.feat.name}|${e.feat.source}`)) keys.add(key);
+  return keys;
+}
+// 5etools prerequisites: any one entry of the list, with every condition in it; ones the sheet can't judge (campaign, item, prose) pass
+// ponytail: judged on the character now, so a feat's own +1 can count toward its prerequisite; per-level snapshots if that matters
+function prereqMet(x) {
+  if (!x?.prerequisite || !S) return true;
+  const R = S.R, low = v => String(v).split('|')[0].replace(/#c$/, '').toLowerCase();
+  const has = n => R.sources.some(s => s.name.toLowerCase() === low(n));
+  const spells = new Set([...cur.spells, ...R.bonusSpells].map(sp => sp.name.toLowerCase()));
+  const casts = () => S.spellcasting.length > 0;
+  const test = {
+    level: v => (typeof v === 'number' ? S.level : v.class ? R.classes.find(k => k.cls?.name === v.class.name)?.level || 0 : S.level) >= (v.level ?? v),
+    ability: v => v.some(o => Object.entries(o).every(([a, n]) => S.scores[a] >= n)),
+    race: v => v.some(r => low(R.race?.name || '') === low(r.name) && (!r.subrace || low(R.subrace?.name || '').includes(low(r.subrace)))),
+    proficiency: v => v.some(o => Object.entries(o).every(([k, n]) => S.profs[k]?.[n])),
+    spellcasting: casts, spellcastingFeature: casts, spellcasting2020: () => casts() || R.bonusSpells.length > 0,
+    pact: v => has(`pact of the ${v}`),
+    spell: v => v.every(sp => typeof sp !== 'string' || spells.has(low(sp))),
+    optionalfeature: v => v.every(has), feature: v => v.every(has),
+    feat: v => v.every(n => cur.feats.some(f => f.name.toLowerCase() === low(n))),
+    background: v => v.some(b => low(b.name) === low(R.background?.name || '')),
+  };
+  return x.prerequisite.some(p => Object.entries(p).every(([k, v]) => !test[k] || test[k](v)));
+}
+// a change to the levels (new, edited or undone) moves current HP with the maximum, CON changes across all levels included; returns the change
+function keepHpGap(change) {
+  const m0 = S.hpMax;
+  change();
+  S = compute();
+  if (cur.hp.current != null) cur.hp.current = Math.max(0, cur.hp.current + S.hpMax - m0);
+  return S.hpMax - m0;
+}
+// undo the latest level-up: its hit points, ASI or feat, the class level (and subclass or class with it); the picks it brought go when it's saved (prunePicks)
+function undoLevel() {
+  const e = cur.levels.pop(), ci = cur.classes.findIndex(k => k.name === e.cls), k = cur.classes[ci];
+  if (k) {
+    const cls = find('class', k.name, k.source), f = cls?.hd?.faces || 8;
+    if (cur.hitDiceUsed[f]) cur.hitDiceUsed[f] = Math.min(cur.hitDiceUsed[f], S.hitDice[f] - 1);
+    k.level--;
+    k.hpRolls.length = k.level;
+    if (!cls || k.level < subclassLevel(cls)) k.subclass = null;
+    if (!k.level) cur.classes.splice(ci, 1);
+  }
+  const fi = e.feat && e.feat !== 'owed' ? cur.feats.findLastIndex(f => f.name === e.feat.name && f.source === e.feat.source) : -1;
+  if (fi >= 0) cur.feats.splice(fi, 1);
+  toast(`Undid level ${cur.levels.length + 1} (${e.cls} ${(k?.level ?? 0) + 1})`);
+}
+
+// overlay holding just the picks to make: { title, note, keys, only, lock }, opened by the ⚠ next to the name, after a level-up and by a level's Edit
+// keys: () => the rows it covers, made or not (a level's Edit); otherwise the open picks passing only(key) (default: all)
+// lock: it won't close while any of its picks is open
+function openPicks(o) { ui.picks = { ...o, shown: new Set() }; openDlg(picksView); }
+// a pick stays listed once it's been shown, so it can still be changed until Done; ones a change creates (a feat's or new subclass's picks) join in
+function picksRows() {
+  const o = ui.picks, all = allPicks();
+  if (o.keys) for (const k of o.keys()) o.shown.add(k);
+  else for (const [k, , done] of all) if (!done && (!o.only || o.only(k))) o.shown.add(k);
+  return all.filter(([k]) => o.shown.has(k));
+}
+function picksView() {
+  const { title, note, lock } = ui.picks, xs = picksRows();
+  return `<h2>${esc(title)}</h2>${xs.length ? `${note ? `<p>${esc(note)}</p>` : ''}${xs.map(p => p[1]).join('')}` : '<p>Nothing to choose.</p>'}
+    <div class=btns><button class=primary data-act=closedlg ${lock && xs.some(p => !p[2]) ? 'disabled' : ''}>Done</button></div>`;
 }
 
 function asiView() {
   const used = Object.values(ui.lu.asi).reduce((a, b) => a + b, 0);
   return `<h3>Ability Score Improvement</h3>
-    <label class=small><input type=checkbox data-path="@lu.feat" ${ui.lu.feat ? 'checked' : ''}> Take a feat instead (picked after confirming)</label>
+    <label class=small><input type=checkbox data-path="@lu.feat" ${ui.lu.feat ? 'checked' : ''}> Take a feat instead (picked after Done)</label>
     ${ui.lu.feat ? '' : `<p class=small>Spend 2 points (max 20): <b>${2 - used}</b> left. <button data-act=asireset>Reset</button></p>
     <div class=btns>${ABIL.map(a => {
       const now = S.scores[a] + (ui.lu.asi[a] || 0);
@@ -1174,7 +1362,150 @@ function doRoll(expr, label, { d20 = false, adv = false, dis = false } = {}) {
   ui.log.unshift({ label, total: r.total, text: label === expr ? r.text : `${expr}: ${r.text}`, nat: d20 ? r.d20 : null });
   ui.log.length = Math.min(ui.log.length, 40);
   renderDice();
+  rollFx(r, label, d20 ? r.d20 : null);
   return r;
+}
+
+// Every die is tossed up from the dice bar, bounces off the screen edges and settles on its face. Then, all at once, the other dice
+// dash into the primary one, the die advantage/disadvantage discards greys out and sinks, and the flat bonus pops up beside it and
+// smacks into it: the primary die bumps to the final total. Done within 1s; fades out by 4s (the bar keeps the result).
+// [outline, facet lines] per die, in a 100×100 box, drawn like the app icon (the d20 is the icon's)
+const DIE_SVG = { 4: ['M50 7 94 87H6Z', 'M50 7v52M6 87l44-28 44 28'],
+  6: ['M22 8h56a14 14 0 0 1 14 14v56a14 14 0 0 1-14 14H22A14 14 0 0 1 8 78V22A14 14 0 0 1 22 8Z', 'M24 24h52v52H24ZM12 12l12 12M88 12 76 24M88 88 76 76M12 88l12-12'],
+  8: ['M50 5 95 50 50 95 5 50Z', 'M50 5 24 62h52ZM5 50l19 12M95 50 76 62M24 62l26 33 26-33'],
+  10: ['M50 4 96 45 50 96 4 45Z', 'M50 4 27 53l23 14 23-14ZM4 45l23 8M96 45l-23 8M50 67v29'],
+  12: ['M50 5 95 38 78 93H22L5 38Z', 'M50 27 74 45 65 74H35L26 45ZM50 5v22M95 38 74 45M78 93 65 74M22 93 35 74M5 38l21 7'],
+  20: ['M50 4 91 28v44L50 96 9 72V28Z', 'M50 4 26 60h48ZM9 28l17 32M91 28 74 60M26 60l24 36 24-36'] };
+const dieSvg = f => { const [o, l] = DIE_SVG[f] || DIE_SVG[f === 100 ? 10 : 6]; return `<svg viewBox="0 0 100 100"><path class=r d="${o}"/><path class=o d="${o}"/><path d="${l}"/></svg>`; };
+let fxStop = () => {};
+function rollFx(r, label, nat) {
+  fxStop();
+  // ponytail: at most 12 dice on screen (a crit 40d6 would bury the sheet); the total still counts them all
+  const shown = r.dice.slice(0, 12), p = Math.max(0, shown.findIndex(d => !d.drop));
+  if (!shown.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const dice = [shown[p], ...shown.filter((_, i) => i !== p)]; // [primary, ...the rest]
+  const n = dice.length, R = n > 6 ? 22 : n > 3 ? 26 : 30, T = 520, bar = $('#dice'), rnd = Math.random; // die radius (px), flight time (ms)
+  const lo = R + 4, hx = innerWidth - R - 4, hy = (bar.hidden ? innerHeight : bar.getBoundingClientRect().top) - R - 4; // walls for die centres
+  const el = document.createElement('div');
+  el.className = 'rollfx'; el.popover = 'manual'; el.ariaHidden = 'true'; // popover: top layer, so it also shows over open dialogs
+  el.style.setProperty('--d', `${2 * R}px`);
+  el.innerHTML = dice.map(d => `<div class=fxdie><div class=fxface data-f=${d.f}>${dieSvg(d.f)}<b></b></div></div>`).join('') + `<small class=fxlabel>${esc(label)}</small>`;
+  document.body.append(el); el.showPopover?.();
+  const cap = el.lastChild, timers = [], later = (f, ms) => timers.push(setTimeout(f, ms));
+  let raf;
+  const stop = () => { cancelAnimationFrame(raf); timers.forEach(clearTimeout); el.remove(); if (fxStop === stop) fxStop = () => {}; };
+  fxStop = stop;
+
+  // Where they land: the primary left of centre (room for the bonus on its right), the rest in a sunflower spiral around it, off its right side.
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const ex = lo + (hx - lo) * (n > 1 ? .3 + .25 * rnd() : .15 + .35 * rnd()), ey = lo + (hy - lo) * (.3 + .3 * rnd()), ends = [[ex, ey]];
+  for (let k = 1; ends.length < n; k++) {
+    const a = k * 2.4 + 2, d = R * (2.25 + 1.25 * Math.sqrt(k - 1));
+    if (Math.cos(a) < .5) ends.push([clamp(ex + d * Math.cos(a), lo, hx), clamp(ey + d * Math.sin(a), lo, hy)]);
+  }
+  // Each flight is a straight line folded at the walls: each fold is a bounce. Start on the bottom edge and pick the mirror image
+  // of the landing spot whose unfolded path is closest to D px long.
+  const fold = (u, l, h) => { const L = 2 * (h - l), m = ((u - l) % L + L) % L; return l + Math.min(m, L - m); };
+  const seg = (u, l, h) => Math.floor((u - l) / (h - l)); // changes at each bounce
+  const imgs = (e, l, h) => [-2, -1, 0, 1, 2].flatMap(k => [e + 2 * k * (h - l), 2 * l - e + 2 * k * (h - l)]);
+  const fx = dice.map((d, i) => {
+    const node = el.children[i], [x, y] = ends[i], sx = lo + (hx - lo) * rnd(), sy = hy - 1, D = (hx + hy) * (.5 + .2 * rnd());
+    let best = [x, y], bs = Infinity;
+    for (const ux of imgs(x, lo, hx)) for (const uy of imgs(y, lo, hy)) {
+      const sc = Math.abs(Math.hypot(ux - sx, uy - sy) - D) + 150 * rnd();
+      if (uy < sy - R && sc < bs) { bs = sc; best = [ux, uy]; }
+    }
+    return { d, node, face: node.firstChild, num: node.firstChild.lastChild, val: d.sign * d.v, x, y, sx, sy, vx: best[0] - sx, vy: best[1] - sy,
+      T: i ? T - 80 * rnd() : T, spin: (rnd() < .5 ? -1 : 1) * 720 + (rnd() - .5) * 30, hit: { x: [0, -1e9], y: [0, -1e9] },
+      seen: { x: seg(sx, lo, hx), y: seg(sy, lo, hy) }, lastNum: -1e9, done: false };
+  });
+  const [P] = fx, pos = o => `${o.x - R}px ${o.y - R}px`;
+  const squash = ([a, ti], t) => a * .4 * Math.exp((ti - t) / 50) * Math.cos((t - ti) / 17); // a spring: squash, slight stretch, settle
+  let t0;
+  el.animate({ opacity: [0, 1] }, 90);
+  const frame = now => {
+    t0 ??= now;
+    for (const o of fx) if (!o.done) {
+      const t = Math.min(now - t0, o.T), k = 1 - t / o.T, s = 1 - k ** 3; // speed ∝ k²: rolls to a smooth stop exactly at T
+      const ux = o.sx + o.vx * s, uy = o.sy + o.vy * s, x = fold(ux, lo, hx), y = fold(uy, lo, hy);
+      for (const [ax, u, h] of [['x', ux, hx], ['y', uy, hy]]) if (seg(u, lo, h) !== o.seen[ax]) { o.seen[ax] = seg(u, lo, h); o.hit[ax] = [k * k + .15, t]; }
+      const hop = k ** 1.5 * Math.abs(Math.cos(Math.PI * 2.5 * t / o.T)), z = 1 + .35 * hop; // little hops off the table, from a high toss
+      const qx = squash(o.hit.x, t), qy = squash(o.hit.y, t);
+      o.node.style.translate = `${x - R}px ${y - R}px`;
+      o.node.style.scale = `${z * (1 - qx + qy / 2)} ${z * (1 - qy + qx / 2)}`;
+      o.node.style.filter = `drop-shadow(${3 + 9 * hop}px ${5 + 14 * hop}px ${2 + 7 * hop}px rgb(60 30 10 / ${.4 - .2 * hop}))`;
+      o.face.style.rotate = `${o.spin * s}deg`;
+      if (t > .8 * o.T) o.num.textContent = o.val;
+      else if (now - o.lastNum > 45 + 120 * (t / o.T) ** 2) { o.lastNum = now; o.num.textContent = 1 + Math.floor(rnd() * o.d.f); } // faces flicker, slowing down
+      if (t === o.T) { o.done = true; land(o); }
+    }
+    if (!P.done) raf = requestAnimationFrame(frame); // the primary lands last
+  };
+  raf = requestAnimationFrame(frame);
+
+  const land = o => {
+    o.node.style.scale = '';
+    o.node.animate({ scale: [1, '1.15 .85', '.95 1.05', 1] }, { duration: 220, easing: 'ease-out' });
+    o.num.animate({ scale: [1.35, 1] }, { duration: 200, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+    if (o !== P) return;
+    if (P.d.f === 20) { P.node.classList.toggle('fx20', nat === 20); P.node.classList.toggle('fx1', nat === 1); }
+    later(merge, 30);
+  };
+  const merge = () => {
+    const rest = fx.slice(1), adding = rest.some(o => !o.d.drop);
+    for (const o of rest) {
+      if (o.d.drop) { // discarded by advantage/disadvantage: greys out and sinks away
+        o.node.classList.add('fxdrop');
+        o.node.animate({ translate: [pos(o), `${o.x - R}px ${o.y - R + 14}px`], scale: [1, .55], opacity: [1, 0] }, { duration: 380, easing: 'ease-in', fill: 'forwards' });
+        continue;
+      }
+      const dx = o.x - P.x, dy = o.y - P.y, l = Math.hypot(dx, dy) || 1;
+      o.node.animate([ // pulls back a little, then dashes into the primary and vanishes behind it
+        { translate: pos(o), scale: 1, easing: 'ease-out' },
+        { translate: `${o.x - R + 8 * dx / l}px ${o.y - R + 8 * dy / l}px`, scale: 1.08, offset: .3, easing: 'cubic-bezier(.6,0,1,.6)' },
+        { translate: pos(P), scale: .5, opacity: 1, offset: .94 },
+        { translate: pos(P), scale: .4, opacity: 0 },
+      ], { duration: 240, fill: 'forwards' });
+    }
+    if (r.flat) bonus();
+    if (r.flat || adding) later(clash, 225); else later(caption, 200);
+  };
+  const gap = 22;
+  const bonus = () => {
+    const b = el.appendChild(document.createElement('b'));
+    b.className = 'fxbonus'; b.textContent = signed(r.flat);
+    const w = b.offsetWidth, h = b.offsetHeight;
+    b.style.translate = `${P.x + R + gap}px ${P.y - h / 2}px`;
+    b.animate([
+      { transform: 'scale(0) rotate(-30deg)', opacity: 0, easing: 'cubic-bezier(.3,1.7,.6,1)' }, // pop up
+      { transform: 'scale(1) rotate(0)', opacity: 1, offset: .38, easing: 'ease-out' },
+      { transform: 'translateX(8px) scale(1.06, .94)', offset: .56, easing: 'cubic-bezier(.6,0,1,.5)' }, // wind up, then charge
+      { transform: `translateX(${-gap - 3}px) scale(.75, 1.2)`, offset: .75, easing: 'ease-out' }, // smack
+      { transform: `translateX(${-gap - w / 2}px) scale(.3)`, opacity: 0 }, // ...and melts into the die
+    ], { duration: 300, fill: 'forwards' });
+  };
+  const clash = () => {
+    P.num.textContent = r.total;
+    P.node.animate(r.flat ? { translate: [pos(P), `${P.x - R - 9}px ${P.y - R}px`, pos(P)], scale: [1, '.8 1.16', '1.07 .94', 1] } // knocked by the bonus
+      : { scale: [1, 1.22, .92, 1] }, { duration: 200, easing: 'ease-out' }); // swells with the merged dice
+    P.num.animate({ scale: [1.9, .9, 1], textShadow: ['0 0 10px #ffd76a, 0 0 4px #ffd76a', '0 1px 0 rgb(0 0 0 / .4)'] }, { duration: 220, easing: 'ease-out' });
+    const cx = r.flat ? P.x + R * .85 : P.x, r0 = r.flat ? 5 : R * .8; // sparks fly from the bonus's point of impact, or all round the die
+    const ring = el.appendChild(document.createElement('i'));
+    ring.className = 'fxring'; ring.style.translate = `${cx}px ${P.y}px`;
+    ring.animate({ scale: r.flat ? [.2, 1.5] : [1, 3.2], opacity: [.9, 0] }, { duration: 260, easing: 'ease-out', fill: 'forwards' });
+    for (let i = 0; i < 8; i++) {
+      const sp = el.appendChild(document.createElement('i')), a = i * Math.PI / 4 + rnd() * .5, d = r0 + 13 + 12 * rnd();
+      sp.className = 'fxspark'; sp.style.translate = `${cx}px ${P.y}px`;
+      sp.animate({ transform: [`rotate(${a}rad) translateX(${r0}px) scaleX(1)`, `rotate(${a}rad) translateX(${d}px) scaleX(.1)`], opacity: [1, 0] },
+        { duration: 260, easing: 'cubic-bezier(.2,.8,.4,1)', fill: 'forwards' });
+    }
+    later(caption, 90);
+  };
+  const caption = () => {
+    cap.style.translate = `${P.x}px ${P.y + R + 6}px`;
+    cap.animate({ opacity: [0, 1], transform: ['translate(-50%, -5px)', 'translate(-50%, 0)'] }, { duration: 200, easing: 'ease-out', fill: 'forwards' });
+  };
+  later(() => el.animate({ opacity: [1, 0] }, { duration: 450, easing: 'ease-in', fill: 'forwards' }).finished.then(stop, stop), 3550);
 }
 
 const stableNote = () => { if (cur.deathSaves.s >= 3) toast('Stable: unconscious at 0 HP until healed'); };
@@ -1272,24 +1603,21 @@ const ACT = {
     commit();
   },
   setsub: el => { const k = cur.classes[idx(el)], cls = S.R.classes[idx(el)].cls, s = subclassesOf(cls)[+el.value]; k.subclass = s ? refOf(s) : null; commit(); },
-  lvl: el => {
-    const i = idx(el), k = cur.classes[i];
-    if (+el.dataset.d > 0) return k.level < 20 && levelUp(i);
-    if (k.level > 1) { k.level--; k.hpRolls.length = k.level; return commit(); }
-    if (confirm(`Remove ${k.name}?`)) { cur.classes.splice(i, 1); commit(); }
-  },
   lu: el => {
     const k = cur.classes[ui.lu.i], cls = find('class', k.name, k.source), f = cls.hd?.faces || 8, v = el.dataset.v;
-    const gain = v === 'max' ? f : v === 'avg' ? f / 2 + 1 : doRoll(`1d${f}`, `${k.name} hit points`).total;
-    k.hpRolls[k.level] = v === 'roll' ? gain : null;
-    k.level++;
-    if (cur.hp.current != null) cur.hp.current += gain + S.vars['mod.con'];
-    toast(`${k.name} level ${k.level}: +${gain + S.vars['mod.con']} HP`);
-    if (!ui.lu.feat) for (const [a, n] of Object.entries(ui.lu.asi)) cur.asiBonuses[a] = (cur.asiBonuses[a] || 0) + n;
-    const feat = ui.lu.feat;
-    ui.lu = null;
-    if (feat) { openPicker('feat'); return commit(); } // reuse the open dialog; closing first would race its close event
-    closeDlg(); commit();
+    const roll = v === 'roll' ? doRoll(`1d${f}`, `${k.name} hit points`).total : null, asi = Object.entries(ui.lu.asi).flatMap(([a, n]) => Array(n).fill(a));
+    const gain = keepHpGap(() => {
+      k.hpRolls[k.level] = roll;
+      k.level++;
+      cur.levels.push({ cls: k.name, ...(ui.lu.feat ? { feat: 'owed' } : asi.length && { asi }) });
+    });
+    toast(`${k.name} level ${k.level}: +${gain} HP`);
+    commit();
+    // the picks this level added (feature options, subclass, expertise, the feat…); reuse the open dialog, closing first would race its close event
+    const before = ui.lu.before;
+    openPicks({ title: `${k.name} level ${k.level}: choices`, note: 'Make these choices to finish the level.', only: key => !before.has(key), lock: true });
+    if (ui.lu.feat) openPicker('feat');
+    else if (!picksRows().length) closeDlg();
   },
   method: el => {
     const m = cur.abilityMethod = el.dataset.m;
@@ -1309,6 +1637,17 @@ const ACT = {
   setupdone: () => { cur.setupDone = true; commit(); },
   editsetup: () => { cur.setupDone = false; closeDlg(); commit(); scrollTo({ top: 0, behavior: 'smooth' }); },
   levelchooser: () => openDlg(levelChooser),
+  lvedit: el => {
+    const n = +el.dataset.n;
+    openPicks({ title: `Level ${n + 1}: ${cur.levels[n].cls} ${classLevelAt(n)}`, keys: () => levelKeys(n) });
+  },
+  lvundo: () => {
+    const n = cur.levels.length - 1;
+    if (confirm(`Undo level ${n + 1} (${cur.levels[n].cls} ${classLevelAt(n)})? Its hit points, ASI or feat, subclass and choices are removed.`)) { keepHpGap(undoLevel); commit(); }
+  },
+  lvhp: el => { keepHpGap(() => { cur.classes[+el.dataset.c].hpRolls[+el.dataset.l] = el.value ? +el.value : null; }); commit(); }, // blank = average
+  lvasi: el => { keepHpGap(() => { cur.levels[+el.dataset.n].asi[+el.dataset.j] = el.value || null; }); commit(); },
+  openpicks: () => openPicks({ title: 'Choices to make' }),
   lvlup: el => levelUp(idx(el)),
   asi: el => { ui.lu.asi[el.dataset.a] = (ui.lu.asi[el.dataset.a] || 0) + 1; renderDlg(); },
   asireset: () => { ui.lu.asi = {}; renderDlg(); },
@@ -1643,7 +1982,8 @@ document.addEventListener('toggle', e => {
   if (e.target.open && !had && e.target.classList.contains('feat')) render(); // lazy-render feature text
 }, true);
 $('#dlg').addEventListener('close', () => {
-  ui.dlg = null; ui.pick = null; ui.edit = null;
+  if (ui.picks?.lock && picksRows().some(p => !p[2])) return openDlg(picksView); // Escape, backdrop or a picker closing: not finished yet
+  ui.dlg = null; ui.pick = null; ui.edit = null; ui.lu = null; ui.picks = null;
   if (cur && cur.classes.some(k => k.level === 0)) { cur.classes = cur.classes.filter(k => k.level > 0); commit(); }
 });
 $('#info').addEventListener('close', () => { ui.info = []; });

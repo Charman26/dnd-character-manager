@@ -18,6 +18,9 @@ const fixed = () => 0.999; // every die rolls max
 assert.equal(roll('2d6+3', {}, fixed).total, 15);
 assert.equal(roll('1d8+2', { crit: true }, fixed).total, 18);
 assert.equal(roll('1d20+5', { adv: true }, fixed).d20, 20);
+{ const seq = [.5, .1], r = roll('1d20+1d4+5', { dis: true }, () => seq.shift() ?? .999); // d20s 11 and 3, d4 4
+  assert.deepEqual(r.dice, [{ f: 20, v: 3, sign: 1 }, { f: 20, v: 11, sign: 1, drop: true }, { f: 4, v: 4, sign: 1 }]);
+  assert.equal(r.flat, 5); assert.equal(r.total, 12); }
 assert.equal(mergeDice(['8d6', '1d6', '1d6']), '10d6');
 
 // slots: single class, half/third casters round up; multiclass sums
