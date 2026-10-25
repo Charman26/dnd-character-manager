@@ -1602,7 +1602,7 @@ const ACT = {
     clearChoices('subrace');
     commit();
   },
-  setsub: el => { const k = cur.classes[idx(el)], cls = S.R.classes[idx(el)].cls, s = subclassesOf(cls)[+el.value]; k.subclass = s ? refOf(s) : null; commit(); },
+  setsub: el => { const k = cur.classes[idx(el)], cls = S.R.classes[idx(el)].cls, s = subclassesOf(cls)[+el.value]; keepHpGap(() => { k.subclass = s ? refOf(s) : null; }); commit(); },
   lu: el => {
     const k = cur.classes[ui.lu.i], cls = find('class', k.name, k.source), f = cls.hd?.faces || 8, v = el.dataset.v;
     const roll = v === 'roll' ? doRoll(`1d${f}`, `${k.name} hit points`).total : null, asi = Object.entries(ui.lu.asi).flatMap(([a, n]) => Array(n).fill(a));
@@ -1939,7 +1939,8 @@ document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.act) return ACT[el.dataset.act]?.(el, e);
   if (!el.dataset.path || el.dataset.path === '@pick.q') return;
-  setPath(el.dataset.path, inputValue(el));
+  const set = () => setPath(el.dataset.path, inputValue(el));
+  if (cur && el.dataset.path[0] !== '@') keepHpGap(set); else set(); // a pick can move max HP (a CON bump, Draconic Resilience): damage taken stays taken
   if (el.dataset.path.startsWith('profChoices.tool:background') && cur.bgKit) grantKit(); // the kit's "any artisan's tool" follows this pick
   if (el.dataset.path[0] !== '@') save();
   if (el.dataset.path[0] === '@') return requestAnimationFrame(renderDlg);

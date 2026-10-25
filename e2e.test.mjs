@@ -49,7 +49,7 @@ const failures = [];
 async function check(name, fn) {
   try { await fn(); console.log('✓', name); } catch (e) {
     failures.push(name);
-    console.log('✗', name, '\n   ', e.message.split('\n')[0]);
+    console.log('✗', name, '\n   ', e.message.split('\n').slice(0, 8).join('\n    '));
     await page.screenshot({ path: join(profile, `fail-${name.replace(/\W+/g, '_')}.png`), fullPage: true }).catch(() => {});
   }
 }
