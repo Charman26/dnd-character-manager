@@ -341,6 +341,19 @@ await check('cleric: Life Domain grants heavy armor; undo restores removals, 3 s
   assert.ok(await page.locator('[data-act=undo]').isDisabled());
 });
 
+await check('coins: stepping one coin is a single undo step', async () => {
+  await open('example-cleric');
+  const coin = k => page.locator(`[data-path="currency.${k}"]`);
+  const gp = await coin('gp').inputValue(), sp = await coin('sp').inputValue();
+  for (let i = 1; i <= 5; i++) { await coin('gp').fill(String(+gp + i)); await coin('gp').dispatchEvent('change'); }
+  await coin('sp').fill(String(+sp + 1)); await coin('sp').dispatchEvent('change');
+  await page.locator('[data-act=undo]').click();
+  assert.deepEqual([await coin('gp').inputValue(), await coin('sp').inputValue()], [String(+gp + 5), sp], 'undo reverts the other coin only');
+  await page.locator('[data-act=undo]').click();
+  assert.equal(await coin('gp').inputValue(), gp, 'one more undo reverts all five gp steps');
+  assert.ok(await page.locator('[data-act=undo]').isDisabled());
+});
+
 await check('death saves: three successes hide them (stable); damage at 0 HP brings them back with a failure', async () => {
   await open('example-fighter');
   await page.locator('#hpamt').fill('999'); await page.locator('[data-act=hp][data-op=dmg]').click();

@@ -29,11 +29,15 @@ const WHEN = 'armor noArmor shield noShield notHeavyArmor lightOrNoArmor nonProf
 let chars = [], cur = null, S = null, saveT;
 const ui = { plan: null, mode: 'normal', crit: false, log: [], showLog: false, dlg: null, pick: null, edit: null, open: new Set(), info: [] };
 // undo: the last 3 saved states of the open character (JSON), base = the state as saved now
-const hist = { id: null, base: null, stack: [] };
-function snap() {
+const hist = { id: null, base: null, stack: [], key: null };
+// key: changes in a row with the same key (stepping one coin up and down) make a single undo step
+function snap(key = null) {
   const s = JSON.stringify(cur);
-  if (hist.id !== cur.id) Object.assign(hist, { id: cur.id, base: s, stack: [] });
-  else if (s !== hist.base) { hist.stack.push(hist.base); if (hist.stack.length > 3) hist.stack.shift(); hist.base = s; }
+  if (hist.id !== cur.id) Object.assign(hist, { id: cur.id, base: s, stack: [], key: null });
+  else if (s !== hist.base) {
+    if (!key || key !== hist.key) { hist.stack.push(hist.base); if (hist.stack.length > 3) hist.stack.shift(); }
+    Object.assign(hist, { base: s, key });
+  }
 }
 
 const newChar = () => ({
@@ -106,10 +110,10 @@ function prunePicks() {
   for (const [key, s] of profs) if (!s.from) fix(cur.profChoices, key, s.count, v => profOptions(s, stats).includes(v));
 }
 
-function save() {
+function save(key) {
   if (!cur) return;
   prunePicks();
-  snap();
+  snap(key);
   clearTimeout(saveT);
   const c = cur;
   saveT = setTimeout(() => db.put('characters', structuredClone(c)).catch(e => toast(`Save failed: ${e.message}`)), 250);
@@ -1532,7 +1536,7 @@ const ACT = {
   undo: () => {
     const s = hist.stack.pop();
     if (!s) return;
-    hist.base = s;
+    Object.assign(hist, { base: s, key: null });
     const c = JSON.parse(s);
     chars[chars.indexOf(cur)] = c; cur = c;
     save(); toast(`Undone (${hist.stack.length} more available)`); render();
@@ -1942,7 +1946,7 @@ document.addEventListener('change', e => {
   const set = () => setPath(el.dataset.path, inputValue(el));
   if (cur && el.dataset.path[0] !== '@') keepHpGap(set); else set(); // a pick can move max HP (a CON bump, Draconic Resilience): damage taken stays taken
   if (el.dataset.path.startsWith('profChoices.tool:background') && cur.bgKit) grantKit(); // the kit's "any artisan's tool" follows this pick
-  if (el.dataset.path[0] !== '@') save();
+  if (el.dataset.path[0] !== '@') save(el.dataset.path.startsWith('currency.') ? el.dataset.path : null);
   if (el.dataset.path[0] === '@') return requestAnimationFrame(renderDlg);
   requestAnimationFrame(render);
 });
