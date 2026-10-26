@@ -1453,7 +1453,7 @@ function rollFx(r, label, nat) {
     o.num.animate({ scale: [1.35, 1] }, { duration: 200, easing: 'cubic-bezier(.3,1.6,.5,1)' });
     if (o !== P) return;
     if (P.d.f === 20) { P.node.classList.toggle('fx20', nat === 20); P.node.classList.toggle('fx1', nat === 1); }
-    later(merge, 30);
+    later(merge, n > 1 ? 1000 : 30); // several dice: let their faces be read before they merge
   };
   const merge = () => {
     const rest = fx.slice(1), adding = rest.some(o => !o.d.drop);
