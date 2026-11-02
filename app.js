@@ -7,7 +7,7 @@ import {
 import {
   D, classArt, imgUrl, downloadRules, setRules, list, find, refOf, lookup, search, CAT_LABEL, SEARCH_GROUPS, subclassesOf, findSubclass, classFeatures,
   subclassFeatures, subclassLevel, spellClasses, subclassSpellNames, spellBook, spellMatches, variantBases, resolveItem, esc, entries, detail, spellLevel,
-  spellTime, isConc, itemType, matchScore, abilityText, itemLine, crNum, creatureType, creatureAc, speedText, statblock, grantedSpells, spellAlternatives,
+  spellTime, isConc, itemType, matchScore, typoScore, abilityText, itemLine, crNum, creatureType, creatureAc, speedText, statblock, grantedSpells, spellAlternatives,
 } from './data.js';
 
 const $ = s => document.querySelector(s);
@@ -980,16 +980,17 @@ const GROUP_OF = Object.fromEntries(SEARCH_GROUPS.flatMap(([g, cats]) => cats.ma
 
 function pickerView() {
   const p = ui.pick, cfg = PICK[p.kind], q = p.q.trim();
-  let xs = cfg.items();
-  // same matching and ranking as the lookup; ties keep the picker's own order (spells by level)
-  if (q && p.kind !== 'lookup') xs = xs.map(i => [i, matchScore(i.x.name, q)]).filter(([, s]) => s >= 0).sort((a, b) => a[1] - b[1]).map(([i]) => i);
+  let xs = cfg.items(), typo = xs[0]?.typo;
+  // same matching, typo fallback and ranking as the lookup; ties keep the picker's own order (spells by level)
+  const rank = score => xs.map(i => [i, score(i.x.name, q)]).filter(([, s]) => s >= 0).sort((a, b) => a[1] - b[1]).map(([i]) => i);
+  if (q && p.kind !== 'lookup') { const ys = rank(matchScore); typo = !ys.length; xs = typo ? rank(typoScore) : ys; }
   else if (!q && xs.length > 400 && !cfg.browse?.()) xs = [];
   const total = xs.length;
   p.results = xs = xs.slice(0, 250);
   return `<h2>${esc(typeof cfg.title === 'function' ? cfg.title() : cfg.title)}</h2>
     <input class=search type=search data-path="@pick.q" value="${esc(p.q)}" placeholder="${p.kind === 'lookup' ? 'Spells, items, creatures, rules…' : 'Search…'}" enterkeyhint=search autofocus
       title="Enter opens the first result; ↓ moves into the list">${cfg.filters?.() || ''}
-    <div class=plist>${xs.map(({ x, cat }, i) => {
+    <div class=plist>${typo && xs.length ? '<p class="muted small">No exact matches. Close spellings:</p>' : ''}${xs.map(({ x, cat }, i) => {
       const has = cfg.has?.(x);
       return `<div class=prow><button class=grow data-act=pickrow data-i=${i} ${has ? 'disabled' : ''}>${esc(x.name)}${has ? ' ✓' : ''} <small class=muted>${esc(cfg.sub?.(x, cat) ?? x.source)}</small></button>
         ${cfg.noInfo ? '' : `<button class=icon data-act=info data-cat=${cat} data-name="${esc(x.name)}" data-src="${esc(x.source)}" title=Details>i</button>`}</div>`;

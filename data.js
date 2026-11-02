@@ -131,9 +131,10 @@ export const SEARCH_GROUPS = [
   ['Traps & hazards', ['trap', 'hazard', 'object']], ['Deities & gifts', ['deity', 'reward', 'cult', 'boon']],
 ];
 const ABC = new Intl.Collator();
-// lowercase, apostrophes dropped, other punctuation -> one space: "Hunter's Mark" ~ "hunters mark" (cached: names repeat every keystroke)
+// lowercase, accents and apostrophes dropped, other punctuation -> one space: "Hunter's Mark" ~ "hunters mark", "Selûne" ~ "selune"
+// (cached: names repeat every keystroke)
 const FOLD = new Map();
-const fold = s => FOLD.get(s) ?? FOLD.set(s, s.toLowerCase().replace(/['’`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()).get(s);
+const fold = s => FOLD.get(s) ?? FOLD.set(s, s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/['’`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()).get(s);
 // how well a name matches a query: 0 exact (spaces ignored, so "fire ball" = Fireball), 1 prefix, 2 every word starts a word, 3 anywhere; -1 no match
 export function matchScore(name, q) {
   const n = fold(name), w = fold(q), words = w ? w.split(' ') : [], nn = n.replace(/ /g, ''), ww = w.replace(/ /g, '');
@@ -141,14 +142,46 @@ export function matchScore(name, q) {
   if (!words.every(x => n.includes(x)) && !nn.includes(ww)) return -1;
   return nn === ww ? 0 : n.startsWith(w) ? 1 : words.every(x => ` ${n}`.includes(` ${x}`)) ? 2 : 3;
 }
-// Every word of the query must appear in the name, best matches first. Empty query lists everything.
-export function search(q, cats = Object.keys(CAT_LABEL)) {
-  const hits = [];
-  for (const cat of cats) for (const x of list(cat)) {
-    if (!x.name) continue; // unnamed "standard" subraces: nothing to show
-    const score = matchScore(x.name, q);
-    if (score >= 0) hits.push({ cat, x, score });
+// typo distance (optimal string alignment: a swapped pair is one typo); max only skips words of very different length
+function typos(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let p2 = [], p = [...Array(b.length + 1).keys()];
+  for (let i = 1; i <= a.length; i++) {
+    const c = [i];
+    for (let j = 1; j <= b.length; j++) {
+      c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] !== b[j - 1]));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) c[j] = Math.min(c[j], p2[j - 2] + 1);
+    }
+    [p2, p] = [p, c];
   }
+  return p[b.length];
+}
+// the fallback when nothing matches: every query word is in a name word or a typo or two away from one
+// (none under 4 letters, 1 up to 7, 2 from 8), so "magic missle" finds Magic Missile; the total typos, -1 no match
+export function typoScore(name, q) {
+  const ns = fold(name).split(' ');
+  let total = 0;
+  for (const w of fold(q).split(' ').filter(Boolean)) {
+    const max = w.length < 4 ? 0 : w.length < 8 ? 1 : 2, best = Math.min(...ns.map(n => (n.includes(w) ? 0 : typos(w, n, max))));
+    if (best > max) return -1;
+    total += best;
+  }
+  return total;
+}
+// Every word of the query must appear in the name, best matches first. Empty query lists everything.
+// No matches at all: close spellings instead, each hit marked typo.
+export function search(q, cats = Object.keys(CAT_LABEL)) {
+  const scan = (score, typo) => {
+    const out = [];
+    for (const cat of cats) for (const x of list(cat)) {
+      if (!x.name) continue; // unnamed "standard" subraces: nothing to show
+      const s = score(x.name, q);
+      if (s >= 0) out.push({ cat, x, score: s, typo });
+    }
+    return out;
+  };
+  let hits = scan(matchScore, false);
+  if (!hits.length && q.trim()) hits = scan(typoScore, true);
   // equally good matches: the closest (shortest) name first while typing, alphabetical when browsing
   return hits.sort((a, b) => a.score - b.score || (q.trim() ? a.x.name.length - b.x.name.length : 0) || ABC.compare(a.x.name, b.x.name));
 }

@@ -1,7 +1,7 @@
 // Run: node rules.test.mjs
 import assert from 'node:assert/strict';
 import * as P from './effects.js';
-import { tags, entries, setRules, spellBook, spellMatches, matchScore } from './data.js';
+import { tags, entries, setRules, spellBook, spellMatches, matchScore, typoScore } from './data.js';
 import { featureProfs, mod, profBonus, evalFormula, parseDice, roll, mergeDice, spellSlots, computeCharacter, gatherEffects, computeAction, dmgExpr } from './rules.js';
 
 assert.equal(mod(10), 0); assert.equal(mod(17), 3); assert.equal(mod(8), -1);
@@ -279,5 +279,13 @@ assert.equal(matchScore('Fireball', 'fire'), 1);
 assert.equal(matchScore('Mass Cure Wounds', 'wounds cure'), 2);
 assert.equal(matchScore('Delayed Blast Fireball', 'ball'), 3);
 assert.equal(matchScore('Longsword', 'longsowrd'), -1);
+assert.equal(matchScore('Selûne', 'selune'), 0);
+// typo fallback: swapped letters are one typo, short words must be exact, every word must land
+assert.equal(typoScore('Longsword', 'longsowrd'), 1);
+assert.equal(typoScore('Magic Missile', 'magic missle'), 1);
+assert.equal(typoScore('Mass Cure Wounds', 'cure wonds'), 1);
+assert.equal(typoScore('Ram', 'rma'), -1);
+assert.equal(typoScore('Fireball', 'grapel'), -1);
+assert.equal(typoScore('Magic Missile', 'magic missle zzz'), -1);
 
 console.log('rules.test.mjs: all assertions passed');
