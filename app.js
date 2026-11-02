@@ -768,7 +768,7 @@ function inventoryView() {
         ${equippable ? `<button class="tog ${inv.equipped ? 'on' : ''}" data-act=equip data-i=${i}>${inv.equipped ? 'Equipped' : 'Equip'}</button>` : ''}
         ${data.reqAttune ? `<button class="tog ${inv.attuned ? 'on' : ''}" data-act=attune data-i=${i}>${inv.attuned ? 'Attuned' : 'Attune'}</button>` : ''}
 </summary>
-      ${open ? `<div class=entries>${inv.custom ? '' : `<div class=meta>${itemLine(data)}</div>`}${entries(data.entries)}</div>` : ''}
+      <div class=entries>${inv.custom ? '' : cardText(data, () => `<div class=meta>${itemLine(data)}</div>${entries(data.entries)}`)}</div>
       <div class=btns><label class=small>Qty <input type=number class=qty min=0 data-path="inventory.${i}.qty" value="${inv.qty ?? 1}"></label>
         ${inv.custom ? `<input data-path="inventory.${i}.name" value="${esc(inv.name)}" aria-label="Item name">
           <label class=small>lb <input type=number class=qty data-path="inventory.${i}.weight" value="${inv.weight || 0}"></label>
@@ -784,6 +784,15 @@ function inventoryView() {
       .map(([g, xs]) => `<h4>${GROUP_IC[g]}${g}</h4>${xs.join('')}`).join('') || '<p class=muted>Empty.</p>'}</section>`;
 }
 
+// A sheet card's rules text, built once per rules entry. Cards always carry it (a closed <details> hides it),
+// so opening one shows it at once, with no re-render; the cache keeps the re-renders that do happen as cheap.
+const CARD_TEXT = new WeakMap();
+const cardText = (x, make) => {
+  if (!x) return make();
+  if (!CARD_TEXT.has(x)) CARD_TEXT.set(x, make());
+  return CARD_TEXT.get(x);
+};
+
 function featuresView() {
   const groups = {};
   for (const s of S.R.sources) if (s.kind !== 'spell') (groups[s.group] ||= []).push(s);
@@ -791,7 +800,7 @@ function featuresView() {
     const def = sourceDef(cur, s, P), open = ui.open.has(s.key);
     return `<details class=feat data-key="${esc(s.key)}" ${open ? 'open' : ''}><summary><span class=grow>${esc(s.name)}</span>
         ${s.level ? `<small class=muted>Lv ${s.level}</small>` : ''}${def?.toggle ? togBtn(s, isOn(s.key) ? 'On' : 'Off') : def?.effects?.length ? '<span class=badge title="Has automatic effects">auto</span>' : ''}</summary>
-      ${open ? `<div class=entries>${s.cat === 'feat' || s.cat === 'optionalfeature' ? detail(s.cat, s.data) : entries(s.data?.entries)}</div>` : ''}
+      <div class=entries>${cardText(s.data, () => (s.cat === 'feat' || s.cat === 'optionalfeature' ? detail(s.cat, s.data) : entries(s.data?.entries)))}</div>
       <div class=btns>${s.custom ? `<button data-act=effects data-k="${esc(s.key)}" data-n="${esc(s.name)}">Effects…</button>` : ''}<button data-act=featureaction data-k="${esc(s.key)}">Add as action</button>
         ${s.remove ? `<button class=danger data-act=delsource data-k="${esc(s.key)}">Remove</button>` : ''}
         ${s.custom ? `<button class=danger data-act=delcustom data-id="${s.custom.id}">Remove</button>` : ''}</div></details>`;
@@ -824,7 +833,7 @@ function companionsView() {
       <div class=btns><input type=number class=qty id="comphp-${cp.id}" min=0 placeholder=HP aria-label="HP amount"><button class=danger data-act=comphp data-i=${i} data-op=dmg>Damage</button>
         <button class=ok data-act=comphp data-i=${i} data-op=heal>Heal</button><input data-path="companions.${i}.nick" value="${esc(cp.nick || '')}" placeholder="Name" aria-label=Name>
         <button class=danger data-act=delcomp data-i=${i}>Remove</button></div>
-      ${open ? statblock(m) : ''}</details>`;
+      ${cardText(m, () => statblock(m))}</details>`;
   }).join('');
   return `<section class=card>${sechead(`${IC.companions}Companions`, `<button data-act=pick data-what=companion ${list('monster').length ? '' : 'disabled title="Refresh the rules data to download creatures"'}>+ Add creature</button>`)}
     ${cards || '<p class=note>Familiars, animal companions, summons and mounts, with their own HP and attacks. Add one from the ⋮ menu.</p>'}</section>`;
@@ -2133,9 +2142,7 @@ document.addEventListener('submit', e => {
 document.addEventListener('toggle', e => {
   const k = e.target.dataset?.key;
   if (!k) return;
-  const had = ui.open.has(k);
   if (e.target.open) ui.open.add(k); else ui.open.delete(k);
-  if (e.target.open && !had && e.target.classList.contains('feat')) render(); // lazy-render feature text
 }, true);
 $('#dlg').addEventListener('close', () => {
   if (ui.picks?.lock && picksRows().some(p => !p[2])) return openDlg(picksView); // Escape, backdrop or a picker closing: not finished yet

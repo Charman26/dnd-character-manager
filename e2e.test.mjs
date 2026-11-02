@@ -68,6 +68,8 @@ const frame = () => page.evaluate(() => new Promise(r => requestAnimationFrame(r
 const choose = async (loc, v) => { await loc.selectOption(v); await frame(); };
 const done = () => page.locator('#dlg [data-act=lu]').click(); // takes the level
 const more = () => page.locator('.namewrap details.menu > summary').click(); // the ⋮ next to the character name
+// an inventory card by its name line: closed cards carry their rules text too, which may name other items
+const invItem = (name, sel = 'details.item') => page.locator(sel, { has: page.locator('summary', { hasText: name }) });
 const addItem = async (q, re) => { await menu('inventory'); await page.locator('[data-act=pick][data-what=item]').click(); await pick(q, re); await page.keyboard.press('Escape'); };
 const act = name => page.locator('.act', { hasText: name }).first();
 const resLeft = async name => page.locator('.status .res', { hasText: name }).first().locator('.pip.on').count();
@@ -158,13 +160,13 @@ await check('setup: race, background and class grant proficiencies with their so
   const inv = () => page.locator('[data-blk=inventory]').innerText(), gp = () => page.locator('input[data-path="currency.gp"]').inputValue();
   assert.match(await inv(), /Sticks of incense\s*×5/); assert.match(await inv(), /Vestments/); assert.equal(await gp(), '15');
   await page.locator('.kit select[data-act=kitopt]').selectOption('b');
-  await page.locator('details.item', { hasText: 'Prayer wheel' }).waitFor();
-  assert.equal(await page.locator('details.item', { hasText: /^\s*Book/ }).count(), 0, 'option a swapped out');
+  await invItem('Prayer wheel').waitFor();
+  assert.equal(await invItem(/^\s*Book/).count(), 0, 'option a swapped out');
   await page.locator('[data-act=pick][data-what=background]').click(); await pick('sage', /^Sage/);
-  await page.locator('details.item', { hasText: 'Quill' }).waitFor();
+  await invItem('Quill').waitFor();
   assert.doesNotMatch(await inv(), /incense/); assert.equal(await gp(), '10');
   await page.locator('[data-act=pick][data-what=background]').click(); await pick('acolyte', /^Acolyte/);
-  await page.locator('details.item', { hasText: 'Vestments' }).waitFor(); assert.equal(await gp(), '15');
+  await invItem('Vestments').waitFor(); assert.equal(await gp(), '15');
 });
 
 await check('setup confirm hides the panel; Edit character brings it back', async () => {
@@ -227,21 +229,22 @@ await check('edit character: level-up breakdown, edit a level, undo only the lat
 
 await check('items: packs unpack, attunement drives AC, potions become actions, armor proficiency warning', async () => {
   await addItem("explorer's pack", /^Explorer's Pack/);
-  assert.match(await page.locator('details.item', { hasText: 'Torch' }).innerText(), /×10/);
+  assert.match(await invItem('Torch').innerText(), /×10/);
+  assert.match(await invItem('Torch').locator('.entries').textContent(), /burns/, 'a closed card already carries its text: opening it is instant');
   const ac0 = +(await vit('AC'));
   await addItem('ring of protection', /^Ring of Protection/);
-  await page.locator('details.item', { hasText: 'Ring of Protection' }).locator('[data-act=attune]').click();
+  await invItem('Ring of Protection').locator('[data-act=attune]').click();
   assert.equal(+(await vit('AC')), ac0 + 1);
   await addItem('potion of healing', /^Potion of Healing/);
-  await page.locator('details.item', { hasText: 'Potion of Healing' }).locator('summary').click(); // + Action sits in the expanded item
-  await page.locator('details.item[open]', { hasText: 'Potion of Healing' }).locator('[data-act=itemaction]').click();
+  await invItem('Potion of Healing').locator('summary').click(); // + Action sits in the expanded item
+  await invItem('Potion of Healing', 'details.item[open]').locator('[data-act=itemaction]').click();
   assert.match(await act('Potion of Healing').innerText(), /2d4\+2/);
   await addItem('plate armor', /^Plate Armor/);
-  await page.locator('details.item', { hasText: 'Plate Armor' }).locator('[data-act=equip]').click();
+  await invItem('Plate Armor').locator('[data-act=equip]').click();
   assert.match(await bdText('ac'), /Not proficient with heavy armor/);
   await page.keyboard.press('Escape');
   // unmet requirements are marked: inventory, add-item list, details
-  assert.match(await page.locator('details.item', { hasText: 'Plate Armor' }).locator('.unmet').getAttribute('title'), /heavy armor/);
+  assert.match(await invItem('Plate Armor').locator('.unmet').getAttribute('title'), /heavy armor/);
   await menu('inventory'); await page.locator('[data-act=pick][data-what=item]').click();
   await page.locator('#dlg input.search').fill('plate armor');
   await page.locator('.prow', { hasText: /^Plate Armor/ }).locator('.unmet').first().waitFor();
@@ -254,8 +257,8 @@ await check('items: packs unpack, attunement drives AC, potions become actions, 
 await check('magic variants: +1 Longsword is a proper weapon with its bonus', async () => {
   await menu('inventory'); await page.locator('[data-act=pick][data-what=item]').click(); await pick('+1 weapon', /^\+1 Weapon/); await pick('longsword', /^Longsword/);
   await page.keyboard.press('Escape');
-  await page.locator('details.item', { hasText: '+1 Longsword' }).locator('summary').click(); // + Action sits in the expanded item
-  await page.locator('details.item[open]', { hasText: '+1 Longsword' }).locator('[data-act=itemaction]').click();
+  await invItem('+1 Longsword').locator('summary').click(); // + Action sits in the expanded item
+  await invItem('+1 Longsword', 'details.item[open]').locator('[data-act=itemaction]').click();
   assert.match(await act('+1 Longsword').innerText(), /1d8\+\d/);
 });
 
@@ -359,7 +362,7 @@ await check('fighter: extra attack, maneuver DC, great weapon fighting note', as
   await page.locator('[data-blk=features] details.fold > summary').click(); // all picks made: folded behind "View selection…"
   await page.locator('select[data-path="featureChoices.of:Fighter:cls:Fighting Style.0"]').selectOption({ label: 'Unarmed Fighting' });
   await act('Unarmed Strike').locator('[data-act=rdmg]', { hasText: /^1d6\+\d$/ }).waitFor(); // greatsword equipped: d6
-  await page.locator('details.item', { hasText: 'Greatsword' }).locator('[data-act=equip]').click();
+  await invItem('Greatsword').locator('[data-act=equip]').click();
   await act('Unarmed Strike').locator('[data-act=rdmg]', { hasText: /^1d8\+\d$/ }).waitFor(); // empty hands: d8
 });
 
