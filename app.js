@@ -2,7 +2,7 @@ import * as db from './db.js';
 import * as P from './effects.js';
 import {
   ABIL, ABIL_NAME, SKILLS, signed, code, roll, computeCharacter, gatherEffects, computeAction, sourceDef, abilityChoiceSpec,
-  evalFormula, dmgExpr, hitExpr, GROUP, itemEffects, mod, profSources, PROF_LISTS, DMG_TYPE,
+  evalFormula, dmgExpr, hitExpr, GROUP, itemEffects, mod, profSources, PROF_LISTS, DMG_TYPE, weaponProficient,
 } from './rules.js';
 import {
   D, classArt, imgUrl, downloadRules, setRules, list, find, refOf, lookup, search, CAT_LABEL, SEARCH_GROUPS, subclassesOf, findSubclass, classFeatures,
@@ -762,7 +762,7 @@ function inventoryView() {
     const active = data.reqAttune ? inv.attuned : inv.equipped, fx = fxSummary(def.effects);
     const hasAction = cur.actions.some(a => a.ref === inv.id || a.link?.inv === inv.id);
     return `<details class="feat item ${active && fx ? 'active' : ''}" data-key="${esc(key)}" ${open ? 'open' : ''}><summary>
-        <span class=grow>${esc(data.name)}${(inv.qty ?? 1) !== 1 ? ` <small class=muted>×${inv.qty}</small>` : ''} <small class=muted>${esc(itemType(data))}</small></span>
+        <span class=grow>${esc(data.name)}${inv.custom ? '' : unmetMark('item', data)}${(inv.qty ?? 1) !== 1 ? ` <small class=muted>×${inv.qty}</small>` : ''} <small class=muted>${esc(itemType(data))}</small></span>
         ${fx ? `<span class=badge title="${esc(active ? 'Active' : 'Inactive until ' + (data.reqAttune ? 'attuned' : 'equipped'))}">${esc(fx)}</span>` : ''}
         ${equippable ? `<button class="tog ${inv.equipped ? 'on' : ''}" data-act=equip data-i=${i}>${inv.equipped ? 'Equipped' : 'Equip'}</button>` : ''}
         ${data.reqAttune ? `<button class="tog ${inv.attuned ? 'on' : ''}" data-act=attune data-i=${i}>${inv.attuned ? 'Attuned' : 'Attune'}</button>` : ''}
@@ -895,7 +895,6 @@ const PICK = {
   class: { title: 'Add class', items: () => list('class').filter(c => !cur.classes.some(k => k.name === c.name)).map(x => ({ x, cat: 'class' })),
     pick: x => { cur.classes.push({ name: x.name, source: x.source, level: 0, hpRolls: [], subclass: null }); levelUp(cur.classes.length - 1); } },
   feat: { title: 'Add feat', items: () => list('feat').map(x => ({ x, cat: 'feat' })), has: x => cur.feats.some(f => f.name === x.name && f.source === x.source),
-    sub: x => `${x.source}${prereqMet(x) ? '' : ' · prerequisite not met'}`,
     pick: x => {
       cur.feats.push(refOf(x));
       const owed = cur.levels.findLast(e => e.feat === 'owed');
@@ -903,7 +902,7 @@ const PICK = {
       if (ui.picks) ui.dlg = picksView; // back to the remaining choices (the feat's own picks among them)
     } },
   optfeature: { title: 'Add class option', items: () => list('optionalfeature').map(x => ({ x, cat: 'optionalfeature' })),
-    sub: x => `${x.featureType.map(t => OPT_TYPE[t] || t).join(', ')} · ${x.source}${prereqMet(x) ? '' : ' · prerequisite not met'}`, has: x => cur.optionalFeatures.some(f => f.name === x.name && f.source === x.source),
+    sub: x => `${x.featureType.map(t => OPT_TYPE[t] || t).join(', ')} · ${x.source}`, has: x => cur.optionalFeatures.some(f => f.name === x.name && f.source === x.source),
     pick: x => { cur.optionalFeatures.push(refOf(x)); } },
   item: { title: 'Add item', items: () => [...list('baseitem').map(x => ({ x, cat: 'baseitem' })), ...list('item').map(x => ({ x, cat: 'item' })), ...list('magicvariant').map(x => ({ x, cat: 'magicvariant' }))],
     sub: (x, cat) => `${cat === 'magicvariant' ? 'Magic variant — pick a base item' : itemType(x)}${x.rarity && x.rarity !== 'none' ? ' · ' + x.rarity : ''} · ${x.source}`,
@@ -964,7 +963,7 @@ const PICK = {
       ${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'} ${ui.pick.counts[g] ? '' : 'none'}" data-act=lookupf data-g="${esc(g)}">${LOOKUP_IC[g] || ''}${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}</div>
       <small class=note>Filled = searched. Tap a category to switch it on or off.</small>`,
     sub: (x, cat) => `${CAT_LABEL[cat]} · ${cat === 'monster' ? `CR ${x.cr?.cr ?? x.cr ?? '—'} ${creatureType(x)} · ` : cat === 'spell' ? spellLevel(x) + ' · ' : x.className ? x.className + ' · ' : ''}${x.source}`,
-    pick: (x, cat) => showInfo(detail(cat, x)), keepOpen: true },
+    pick: (x, cat) => showInfo(infoOf(cat, x)), keepOpen: true },
 };
 function spellPickItems() {
   const p = ui.pick, max = Math.max(S.slots.length, S.pact?.level || 0);
@@ -983,6 +982,7 @@ const GROUP_OF = Object.fromEntries(SEARCH_GROUPS.flatMap(([g, cats]) => cats.ma
 
 // ---------- search filters (lookup and pickers) ----------
 // Per lookup category: shown only while entries of that category are listed, and narrowing only those; All: every entry.
+// Rules data only, never the open character: what it can't take or use is marked instead (see unmet).
 // get: the entry's value or values (none = left out once the filter is set); order: option order, else A→Z; opts + test: fixed options
 const yn = v => (v ? 'Yes' : 'No');
 const CRS = ['0', '1/8', '1/4', '1/2', ...Array.from({ length: 30 }, (_, i) => String(i + 1))];
@@ -1099,7 +1099,7 @@ function pickerView() {
       title="Enter opens the first result; ↓ moves into the list">${cfg.filters ? cfg.filters(fx.btn) : fx.btn && `<div class=inline>${fx.btn}</div>`}${fx.panel}
     <div class=plist>${typo && xs.length ? '<p class="muted small">No exact matches. Close spellings:</p>' : ''}${xs.map(({ x, cat }, i) => {
       const has = cfg.has?.(x);
-      return `<div class=prow><button class=grow data-act=pickrow data-i=${i} ${has ? 'disabled' : ''}>${esc(x.name)}${has ? ' ✓' : ''} <small class=muted>${esc(cfg.sub?.(x, cat) ?? x.source)}</small></button>
+      return `<div class=prow><button class=grow data-act=pickrow data-i=${i} ${has ? 'disabled' : ''}>${esc(x.name)}${has ? ' ✓' : ''}${unmetMark(cat, x)} <small class=muted>${esc(cfg.sub?.(x, cat) ?? x.source)}</small></button>
         ${cfg.noInfo ? '' : `<button class=icon data-act=info data-cat=${cat} data-name="${esc(x.name)}" data-src="${esc(x.source)}" title=Details>i</button>`}</div>`;
     }).join('') || `<p class=muted>${q ? 'No matches.' : p.kind === 'lookup' ? 'Type to search, set a filter, or tap None and then a category to browse it.' : 'Type to search.'}</p>`}
     ${total > xs.length ? `<p class="muted small">Showing ${xs.length} of ${total}: type more or narrow the filters.</p>` : ''}</div>`;
@@ -1261,6 +1261,34 @@ function levelKeys(n) {
   else if (e.feat) for (const [key] of allPicks()) if (key.includes(`feat:${e.feat.name}|${e.feat.source}`)) keys.add(key);
   return keys;
 }
+// What the open character doesn't meet to take or use an entry: a feat's or option's prerequisites; an item's armor or weapon
+// proficiency, heavy armor's STR and who may attune. Attunement tags the sheet can't judge (alignment, creature type) pass.
+function unmet(cat, x) {
+  if (!cur || !S || !x) return [];
+  if (cat === 'feat' || cat === 'optionalfeature') return prereqMet(x) ? [] : ['prerequisite not met'];
+  if (!['item', 'baseitem', 'magicvariant'].includes(cat)) return [];
+  const out = [], kind = { LA: 'light armor', MA: 'medium armor', HA: 'heavy armor', S: 'shields' }[code(x.type)];
+  if (kind && !S.profs.armor[kind === 'shields' ? 'shield' : kind.split(' ')[0]]) out.push(`not proficient with ${kind}`);
+  if (x.weaponCategory && !weaponProficient(x, S.profs.weapon)) out.push(`not proficient with this ${x.weaponCategory} weapon`);
+  if (x.strength && S.scores.str < +x.strength) out.push(`needs STR ${x.strength} (speed −10 ft)`);
+  const low = v => String(v).split('|')[0].replace(/ \(.*/, '').toLowerCase(), tags = x.reqAttuneTags ?? x.inherits?.reqAttuneTags;
+  const ok = {
+    class: v => cur.classes.some(k => k.name.toLowerCase() === low(v)), race: v => low(cur.race?.name || '') === low(v),
+    background: v => low(cur.background?.name || '') === low(v), spellcasting: () => S.spellcasting.length > 0,
+    skillProficiency: v => S.stats[`skill.${low(v)}`]?.proficient >= 1, languageProficiency: v => !!S.profs.lang[low(v)],
+  };
+  if (tags && !tags.some(t => Object.entries(t).every(([k, v]) => !ok[k] || ok[k](v)))) out.push(`attunement ${x.reqAttune ?? x.inherits?.reqAttune}`);
+  return out;
+}
+const unmetMark = (cat, x) => {
+  const u = unmet(cat, x).join('; ');
+  return u ? ` <span class=unmet title="${esc(cap(u))}" role=img aria-label="Requirements not met: ${esc(u)}">⊘</span>` : '';
+};
+// a rules entry's details, with what the open character doesn't meet under its title
+const infoOf = (cat, x) => {
+  const u = unmet(cat, x);
+  return detail(cat, x).replace('</h2>', `</h2>${u.length ? `<p class=warn>⊘ ${esc(cap(u.join('; ')))}</p>` : ''}`);
+};
 // 5etools prerequisites: any one entry of the list, with every condition in it; ones the sheet can't judge (campaign, item, prose) pass
 // ponytail: judged on the character now, so a feat's own +1 can count toward its prerequisite; per-level snapshots if that matters
 function prereqMet(x) {
@@ -1632,7 +1660,7 @@ const ACT = {
   mode: el => { ui.mode = el.dataset.m; renderDice(); },
   crit: () => { ui.crit = !ui.crit; renderDice(); },
   logtoggle: () => { ui.showLog = !ui.showLog; renderDice(); },
-  info: el => showInfo(detail(el.dataset.cat, find(el.dataset.cat, el.dataset.name, el.dataset.src))),
+  info: el => showInfo(infoOf(el.dataset.cat, find(el.dataset.cat, el.dataset.name, el.dataset.src))),
   infoback: () => { ui.info.pop(); showInfo(ui.info.at(-1), false); },
   lookup: () => openPicker('lookup', { off: new Set(), q: ui.lastQ || '' }), // every category on; reopens on the last search, selected so typing replaces it
   lookupf: el => {
@@ -1947,7 +1975,7 @@ const ACT = {
   },
 
   // inventory
-  itemdetail: (el, e) => { e.preventDefault(); const it = S.R.items.find(i => i.inv.id === el.dataset.id); if (it) showInfo(detail('item', it.data)); },
+  itemdetail: (el, e) => { e.preventDefault(); const it = S.R.items.find(i => i.inv.id === el.dataset.id); if (it) showInfo(infoOf('item', it.data)); },
   customitem: () => { cur.inventory.push({ id: uid(), custom: true, name: 'Custom item', qty: 1, weight: 0, notes: '' }); commit(); },
   grantkit: () => { grantKit(); commit(); },
   kitopt: el => { (cur.kitChoices ||= {})[`g${el.dataset.g}`] = el.value; if (cur.bgKit) grantKit(); commit(); },
@@ -2048,7 +2076,7 @@ document.addEventListener('click', e => {
   if (ref) {
     e.preventDefault();
     const hit = lookup(ref.dataset.tag, ref.dataset.name, ref.dataset.src);
-    return showInfo(hit ? detail(hit.cat, hit.x) : `<h2>${esc(ref.dataset.name)}</h2><p class=muted>Not in the downloaded rules data.</p>`);
+    return showInfo(hit ? infoOf(hit.cat, hit.x) : `<h2>${esc(ref.dataset.name)}</h2><p class=muted>Not in the downloaded rules data.</p>`);
   }
   const rb = e.target.closest('button.roll');
   if (rb) return doRoll(rb.dataset.roll, rb.dataset.roll, { d20: /^1d20/.test(rb.dataset.roll) });

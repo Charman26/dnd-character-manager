@@ -239,6 +239,16 @@ await check('items: packs unpack, attunement drives AC, potions become actions, 
   await addItem('plate armor', /^Plate Armor/);
   await page.locator('details.item', { hasText: 'Plate Armor' }).locator('[data-act=equip]').click();
   assert.match(await bdText('ac'), /Not proficient with heavy armor/);
+  await page.keyboard.press('Escape');
+  // unmet requirements are marked: inventory, add-item list, details
+  assert.match(await page.locator('details.item', { hasText: 'Plate Armor' }).locator('.unmet').getAttribute('title'), /heavy armor/);
+  await menu('inventory'); await page.locator('[data-act=pick][data-what=item]').click();
+  await page.locator('#dlg input.search').fill('plate armor');
+  await page.locator('.prow', { hasText: /^Plate Armor/ }).locator('.unmet').first().waitFor();
+  assert.equal(await page.locator('.prow', { hasText: /^Leather Armor/ }).locator('.unmet').count(), 0, 'light armor is fine for a rogue');
+  await page.locator('.prow', { hasText: /^Plate Armor/ }).locator('[data-act=info]').first().click();
+  assert.match(await page.locator('#info').innerText(), /⊘ Not proficient with heavy armor/);
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
 });
 
 await check('magic variants: +1 Longsword is a proper weapon with its bonus', async () => {
