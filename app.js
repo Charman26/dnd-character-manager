@@ -186,7 +186,8 @@ function resolve(c) {
     for (const sp of grantedSpells(addl, lvl, choices[key]?.[0])) if (!bonusSpells.some(b => b.name === sp.name)) bonusSpells.push({ ...sp, origin, cls });
     book(addl, lvl, key, origin, cls);
   };
-  for (const k of classes) if (k.sub?.additionalSpells) grant(k.sub.additionalSpells, k.level, `as:${k.sub.shortName}`, k.sub.name, k.cls.name);
+  // from the subclass level only: a level's Edit offers the picks that level adds (see levelKeys)
+  for (const k of classes) if (k.sub?.additionalSpells && k.level >= subclassLevel(k.cls)) grant(k.sub.additionalSpells, k.level, `as:${k.sub.shortName}`, k.sub.name, k.cls.name);
   for (const x of [race, subrace]) if (x?.additionalSpells) grant(x.additionalSpells, level, `as:${x.name}`, x.name || race?.name);
   for (const f of feats) if (f.data.additionalSpells) grant(f.data.additionalSpells, level, `as:${f.key}`, f.data.name);
   if (background?.additionalSpells) book(background.additionalSpells, level, `as:${background.name}`, background.name);
