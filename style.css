@@ -38,7 +38,11 @@ button:disabled { opacity: .5; cursor: default; }
 button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 button.danger { color: var(--bad); } button.ok { color: var(--ok); }
 button.icon { background: none; border: none; padding: .2em .4em; min-height: 0; color: var(--muted); }
-input, select, textarea { background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: .3em .45em; min-width: 0; }
+input, textarea { background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: .3em .45em; min-width: 0; }
+/* dropdowns look like the pill buttons: beige, rounded, with the same drawn chevron in every browser (keep 1.5em right padding for it) */
+select { appearance: none; background: var(--chip) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237e2513' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right .6em center / .6em;
+  border: 1px solid var(--line); border-radius: 999px; padding: .3em 1.7em .3em .75em; min-width: 0; min-height: 32px; cursor: pointer; }
+select:hover { border-color: var(--accent); } select:disabled { opacity: .5; cursor: default; }
 select, input[type=number] { font-family: var(--sans); }
 textarea { width: 100%; resize: vertical; }
 /* game-icons symbols (icons.svg): sized to the text, coloured like it, a little room before the label */
@@ -94,7 +98,7 @@ details.card > summary::before { content: '▸ '; color: var(--accent); } detail
 .vitals .hd small { font-weight: normal; color: var(--muted); }
 .chip { display: inline-flex; align-items: center; gap: .3em; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: .1em .6em; font: .92em var(--sans); }
 .chip.on, .chip.conc { background: var(--on); }
-.chip select { padding: 0 .2em; }
+.chip select { border: 0; background-color: transparent; padding: 0 1.3em 0 .2em; min-height: 0; background-position: right .2em center; }
 .res { display: inline-flex; align-items: center; gap: .25em; background: var(--chip); border: 1px solid var(--line); border-radius: 4px; padding: .2em .5em; font-family: var(--sans); }
 .pip { width: 18px; height: 18px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: transparent; }
 .pip.on { background: var(--accent); }
@@ -290,7 +294,7 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
   .seg button:nth-child(3) { border-bottom-left-radius: 6px; } .seg button:last-child { border-bottom-right-radius: 6px; }
   .abtable th, .abtable td { padding: .2em .1em; }
   .abtable .full { display: none; } .abtable .abbr { display: inline; }
-  .abtable td.ctl select, .abtable td.ctl input { width: 4.2em; padding: .2em .1em; }
+  .abtable td.ctl select, .abtable td.ctl input { width: 4.2em; padding: .2em .1em; } .abtable td.ctl select { padding: .2em 1.1em .2em .45em; background-position: right .35em center; }
   .pb { display: inline-grid; grid-template: auto auto / auto auto; align-items: center; column-gap: .25em; }
   .pb .pbv { grid-area: 1 / 1 / 3 / 2; min-width: 1.4em; }
   .pb button { grid-column: 2; min-height: 0; height: 22px; width: 28px; padding: 0; line-height: 1; }
@@ -311,7 +315,7 @@ details.fold > summary::before { content: 'View selection…'; } details.fold[op
 .profrow { display: grid; grid-template-columns: 8.2em 1fr; gap: .4em; align-items: start; padding: .25em 0; border-bottom: 1px dotted var(--line); }
 .profrow > b { font: 1.05rem var(--head); color: var(--accent); font-weight: normal; padding-top: .35em; }
 .profrow .chips { margin: 0; }
-.profrow select { font-size: .85em; padding: .1em .3em; width: 5.5em; }
+.profrow select { font-size: .85em; padding: .1em 1.4em .1em .5em; width: 5.5em; min-height: 26px; }
 .chip.g { box-shadow: inset 0 0 0 1px #c9a24a; background: var(--on); }
 small.block { display: block; }
 
