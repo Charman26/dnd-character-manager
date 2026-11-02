@@ -2,12 +2,13 @@ import * as db from './db.js';
 import * as P from './effects.js';
 import {
   ABIL, ABIL_NAME, SKILLS, signed, code, roll, computeCharacter, gatherEffects, computeAction, sourceDef, abilityChoiceSpec,
-  evalFormula, dmgExpr, hitExpr, GROUP, itemEffects, mod, profSources, PROF_LISTS,
+  evalFormula, dmgExpr, hitExpr, GROUP, itemEffects, mod, profSources, PROF_LISTS, DMG_TYPE,
 } from './rules.js';
 import {
   D, classArt, imgUrl, downloadRules, setRules, list, find, refOf, lookup, search, CAT_LABEL, SEARCH_GROUPS, subclassesOf, findSubclass, classFeatures,
   subclassFeatures, subclassLevel, spellClasses, subclassSpellNames, spellBook, spellMatches, variantBases, resolveItem, esc, entries, detail, spellLevel,
   spellTime, isConc, itemType, matchScore, typoScore, abilityText, itemLine, crNum, creatureType, creatureAc, speedText, statblock, grantedSpells, spellAlternatives,
+  SIZE, SCHOOL, PROP,
 } from './data.js';
 
 const $ = s => document.querySelector(s);
@@ -917,12 +918,13 @@ const PICK = {
   spellaction: { title: 'Cast as action…', items: () => cur.spells.map(s => ({ x: find('spell', s.name, s.source), cat: 'spell', s })).filter(i => i.x),
     pick: (x, cat, it) => { addSpellAction(it.s); closeDlg(); } },
   spell: { title: 'Add spells', items: spellPickItems, sub: x => `${spellLevel(x)} · ${x.source}`, has: x => cur.spells.some(s => s.name === x.name && s.source === x.source),
-    filters: () => {
+    own: ['class', 'level'], // its own list and level selects (subclass and feat lists, castable levels) replace these search filters
+    filters: btn => {
       const lists = [...new Set(S.spellcasting.map(c => c.list))];
       return `<div class=inline><select data-path="@pick.cls">${lists.map(l => opt(l, `${l} list`, ui.pick.cls === l)).join('')}
         ${S.R.spellBooks.map(b => opt(b.id, b.label, ui.pick.cls === b.id)).join('')}${opt('all', 'All spells', ui.pick.cls === 'all')}</select>
         <select data-path="@pick.lvl">${opt('castable', 'Castable levels', ui.pick.lvl === 'castable')}${opt('all', 'All levels', ui.pick.lvl === 'all')}
-        ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => opt(l, l ? ORD(l) : 'Cantrip', ui.pick.lvl === String(l))).join('')}</select></div>`;
+        ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => opt(l, l ? ORD(l) : 'Cantrip', ui.pick.lvl === String(l))).join('')}</select>${btn}</div>`;
     },
     pick: x => {
       const bk = S.R.spellBooks.find(b => b.id === ui.pick.cls);
@@ -951,14 +953,15 @@ const PICK = {
     pick: x => { cur.companions.push({ id: uid(), name: x.name, source: x.source, hp: x.hp?.average || 1, max: x.hp?.average || 1 }); closeDlg(); } },
   lookup: {
     title: 'Look up rules', browse: () => ui.pick.off.size > 0, // a narrowed filter lists everything in it without typing
-    items: () => {
-      const p = ui.pick, all = search(p.q);
+    items: () => search(ui.pick.q),
+    narrow: xs => { // after the search filters: count per category, then drop the switched-off ones
+      const p = ui.pick;
       p.counts = {};
-      for (const h of all) p.counts[GROUP_OF[h.cat]] = (p.counts[GROUP_OF[h.cat]] || 0) + 1;
-      return all.filter(h => !p.off.has(GROUP_OF[h.cat]));
+      for (const h of xs) p.counts[GROUP_OF[h.cat]] = (p.counts[GROUP_OF[h.cat]] || 0) + 1;
+      return xs.filter(h => !p.off.has(GROUP_OF[h.cat]));
     },
-    filters: () => `<div class="inline lkf">${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'} ${ui.pick.counts[g] ? '' : 'none'}" data-act=lookupf data-g="${esc(g)}">${LOOKUP_IC[g] || ''}${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}
-      <button class=tog data-act=lookupf data-g="*">All</button><button class=tog data-act=lookupf data-g="-">None</button></div>
+    filters: btn => `<div class="inline lkf">${btn}<button class=tog data-act=lookupf data-g="*">All</button><button class=tog data-act=lookupf data-g="-">None</button>
+      ${SEARCH_GROUPS.map(([g]) => `<button class="tog ${ui.pick.off.has(g) ? '' : 'on'} ${ui.pick.counts[g] ? '' : 'none'}" data-act=lookupf data-g="${esc(g)}">${LOOKUP_IC[g] || ''}${esc(g)} <small>${ui.pick.counts[g] || 0}</small></button>`).join('')}</div>
       <small class=note>Filled = searched. Tap a category to switch it on or off.</small>`,
     sub: (x, cat) => `${CAT_LABEL[cat]} · ${cat === 'monster' ? `CR ${x.cr?.cr ?? x.cr ?? '—'} ${creatureType(x)} · ` : cat === 'spell' ? spellLevel(x) + ' · ' : x.className ? x.className + ' · ' : ''}${x.source}`,
     pick: (x, cat) => showInfo(detail(cat, x)), keepOpen: true },
@@ -978,23 +981,127 @@ function spellPickItems() {
 }
 const GROUP_OF = Object.fromEntries(SEARCH_GROUPS.flatMap(([g, cats]) => cats.map(c => [c, g])));
 
+// ---------- search filters (lookup and pickers) ----------
+// Per lookup category: shown only while entries of that category are listed, and narrowing only those; All: every entry.
+// get: the entry's value or values (none = left out once the filter is set); order: option order, else A→Z; opts + test: fixed options
+const yn = v => (v ? 'Yes' : 'No');
+const CRS = ['0', '1/8', '1/4', '1/2', ...Array.from({ length: 30 }, (_, i) => String(i + 1))];
+const buckets = (k, l, num, steps, unit) => {
+  const n = v => v.toLocaleString('en'), labels = [`Under ${n(steps[0])} ${unit}`, ...steps.slice(1).map((s, i) => `${n(steps[i])}–${n(s)} ${unit}`), `${n(steps.at(-1))}+ ${unit}`];
+  return { k, l, order: labels, get: x => { const v = num(x); return v == null ? null : labels[steps.filter(s => v >= s).length]; } };
+};
+const SIZE_F = { k: 'size', l: 'Size', get: x => x.size?.map(s => SIZE[s]), order: Object.values(SIZE) };
+const MOVE_F = { k: 'speed', l: 'Movement', get: x => ['fly', 'swim', 'climb', 'burrow'].filter(k => x.speed?.[k]) };
+const RAISES_F = { k: 'raises', l: 'Raises', get: x => (x.ability || []).flatMap(o => Object.entries(o).flatMap(([k, v]) => (k === 'choose' ? v.from || v.weighted?.from || ABIL : k)))
+  .filter(a => ABIL.includes(a)).map(a => a.toUpperCase()) };
+const FACETS = {
+  All: [{ k: 'source', l: 'Source', get: x => x.source }],
+  Spells: [
+    { k: 'class', l: 'Class', get: spellClasses },
+    { k: 'level', l: 'Level', get: x => (x.level ? ORD(x.level) : 'Cantrip'), order: ['Cantrip', ...Array.from({ length: 9 }, (_, i) => ORD(i + 1))] },
+    { k: 'school', l: 'School', get: x => SCHOOL[x.school] },
+    { k: 'time', l: 'Casting time', get: x => x.time?.map(t => ({ bonus: 'Bonus action', minute: '1 minute+', hour: '1 minute+' }[t.unit] || t.unit)),
+      order: ['Action', 'Bonus action', 'Reaction', '1 minute+'] },
+    { k: 'conc', l: 'Concentration', get: x => yn(isConc(x)) },
+    { k: 'ritual', l: 'Ritual', get: x => yn(x.meta?.ritual) },
+    { k: 'comp', l: 'Components', get: ({ components: c = {} }) => [!c.v && 'No verbal', !c.s && 'No somatic', !c.m && 'No material', c.m?.cost && 'Costly material', c.m?.consume && 'Consumed material'] },
+    { k: 'range', l: 'Range', get: ({ range: r = {} }) => (r.type === 'special' ? 'Special' : r.type !== 'point' || r.distance?.type === 'self' ? 'Self' : r.distance?.type === 'touch' ? 'Touch' : 'Ranged'),
+      order: ['Self', 'Touch', 'Ranged', 'Special'] },
+    { k: 'dmg', l: 'Damage', get: x => x.damageInflict },
+    { k: 'save', l: 'Save / attack', get: x => [...(x.savingThrow || []).map(a => `${a.slice(0, 3).toUpperCase()} save`), x.spellAttack && 'Spell attack'] },
+    { k: 'cond', l: 'Condition', get: x => x.conditionInflict },
+  ],
+  Items: [
+    { k: 'type', l: 'Type', get: itemType },
+    { k: 'rarity', l: 'Rarity', get: x => { const r = x.rarity ?? x.inherits?.rarity; return !r || r === 'none' ? 'Mundane' : r; },
+      order: ['Mundane', 'Common', 'Uncommon', 'Rare', 'Very rare', 'Legendary', 'Artifact'] },
+    { k: 'attune', l: 'Attunement', get: x => yn(x.reqAttune ?? x.inherits?.reqAttune) },
+    { k: 'armor', l: 'Armor', get: x => ({ LA: 'Light', MA: 'Medium', HA: 'Heavy' }[code(x.type)]), order: ['Light', 'Medium', 'Heavy'] },
+    { k: 'weapon', l: 'Weapon', get: x => x.weaponCategory },
+    { k: 'prop', l: 'Property', get: x => x.property?.map(p => PROP[code(p.uid ?? p)]) },
+    { k: 'dmg', l: 'Damage', get: x => DMG_TYPE[x.dmgType] },
+    buckets('cost', 'Cost', x => x.value && x.value / 100, [1, 10, 100, 1000], 'gp'),
+    buckets('weight', 'Weight', x => x.weight, [1, 5, 20], 'lb'),
+  ],
+  Creatures: [
+    { k: 'crmin', l: 'CR from', opts: CRS, test: (x, v) => x.cr != null && crNum(x.cr) >= crNum(v) },
+    { k: 'crmax', l: 'CR to', opts: CRS, test: (x, v) => x.cr != null && crNum(x.cr) <= crNum(v) },
+    { k: 'type', l: 'Type', get: x => { const t = creatureType(x); return t?.choose ?? t; } },
+    SIZE_F, MOVE_F,
+    { k: 'env', l: 'Environment', get: x => x.environment },
+  ],
+  Classes: [
+    { k: 'class', l: 'Class', get: x => x.className },
+    { k: 'sub', l: 'Subclass', get: x => { const s = x.subclassShortName ?? x.shortName; return s && `${x.className}: ${s}`; } },
+    { k: 'level', l: 'Level', get: x => x.level && `Level ${x.level}` },
+    { k: 'opt', l: 'Option', get: x => x.featureType?.map(t => OPT_TYPE[t] || t) },
+  ],
+  Races: [SIZE_F, MOVE_F, { k: 'dark', l: 'Darkvision', get: x => yn(x.darkvision) }, RAISES_F],
+  Feats: [RAISES_F],
+};
+const FACET_BY = Object.fromEntries(Object.entries(FACETS).map(([g, fs]) => [g, Object.fromEntries(fs.map(f => [f.k, f]))]));
+const facetVals = (f, x) => [f.get(x)].flat().filter(Boolean).map(v => cap(String(v)));
+const ABC_NUM = new Intl.Collator('en', { numeric: true });
+// every set filter of the entry's category and of All
+function facetOk({ x, cat }) {
+  for (const g of ['All', GROUP_OF[cat]]) {
+    for (const [k, v] of Object.entries(ui.pick.f[g] || {})) {
+      const f = FACET_BY[g][k];
+      if (v && !(f.test ? f.test(x, v) : facetVals(f, x).includes(v))) return false;
+    }
+  }
+  return true;
+}
+// The Filters toggle and, while open, its panel: a tab per listed category that has filters, one select per filter
+// (options from the unfiltered list, so they never vanish when one is set). n: how many are set.
+function facetBar(items) {
+  const p = ui.pick, own = PICK[p.kind].own || [];
+  const live = items.filter(i => !p.off?.has(GROUP_OF[i.cat]));
+  const of = g => live.filter(i => GROUP_OF[i.cat] === g);
+  const shown = g => FACETS[g].filter(f => !own.includes(f.k));
+  const tabs = [...new Set(live.map(i => GROUP_OF[i.cat]))]
+    .filter(g => FACETS[g] && shown(g).some(f => f.opts || of(g).some(i => facetVals(f, i.x).length)));
+  if (!tabs.length) return { btn: '', panel: '', n: 0 };
+  const cnt = g => Object.values(p.f[g] || {}).filter(Boolean).length, n = Object.keys(p.f).reduce((s, g) => s + cnt(g), 0); // hidden tabs' too
+  const btn = `<button class="tog fltbtn ${n ? 'on' : ''}" data-act=flt aria-expanded=${!!p.fx}>Filters${n ? ` <small>${n}</small>` : ''} ${p.fx ? '▴' : '▾'}</button>`;
+  if (!p.fx) return { btn, panel: '', n };
+  const g = tabs.includes(p.fxg) ? p.fxg : tabs[0];
+  const sel = (grp, f, xs) => {
+    const v = p.f[grp]?.[f.k] || '';
+    let os = f.opts || [...new Set(xs.flatMap(i => facetVals(f, i.x)))];
+    if (!f.opts) os = f.order ? os.sort((a, b) => (f.order.indexOf(a) + 1 || 99) - (f.order.indexOf(b) + 1 || 99) || ABC_NUM.compare(a, b)) : os.sort(ABC_NUM.compare);
+    if (!os.length) return '';
+    if (v && !os.includes(v)) os.unshift(v);
+    return `<label class="chip flts ${v ? 'on' : ''}">${v ? `<small>${esc(f.l)}</small>` : ''}<select data-act=fltset data-path="@pick.f.${grp}.${f.k}" aria-label="${esc(f.l)}">
+      ${opt('', v ? 'Any' : f.l)}${os.map(o => opt(o, o, o === v)).join('')}</select></label>`;
+  };
+  const panel = `<div class=flt>${tabs.length > 1 ? `<div class="inline lkf">${tabs.map(t => `<button class="tog ${t === g ? 'on' : ''}" data-act=flttab data-t="${esc(t)}">${LOOKUP_IC[t] || ''}${esc(t)}${cnt(t) ? ` <small>${cnt(t)}</small>` : ''}</button>`).join('')}</div>` : ''}
+    <div class=inline>${sel('All', FACETS.All[0], live)}${shown(g).map(f => sel(g, f, of(g))).join('')}${n ? '<button class=icon data-act=fltclear>Clear all</button>' : ''}</div></div>`;
+  return { btn, panel, n };
+}
+
 function pickerView() {
   const p = ui.pick, cfg = PICK[p.kind], q = p.q.trim();
-  let xs = cfg.items(), typo = xs[0]?.typo;
+  p.f ??= {};
+  let xs = cfg.items();
+  const fx = facetBar(xs);
+  xs = xs.filter(facetOk);
+  if (cfg.narrow) xs = cfg.narrow(xs);
+  let typo = xs[0]?.typo;
   // same matching, typo fallback and ranking as the lookup; ties keep the picker's own order (spells by level)
   const rank = score => xs.map(i => [i, score(i.x.name, q)]).filter(([, s]) => s >= 0).sort((a, b) => a[1] - b[1]).map(([i]) => i);
   if (q && p.kind !== 'lookup') { const ys = rank(matchScore); typo = !ys.length; xs = typo ? rank(typoScore) : ys; }
-  else if (!q && xs.length > 400 && !cfg.browse?.()) xs = [];
+  else if (!q && xs.length > 400 && !cfg.browse?.() && !fx.n) xs = []; // a set filter lists what it leaves without typing
   const total = xs.length;
   p.results = xs = xs.slice(0, 250);
   return `<h2>${esc(typeof cfg.title === 'function' ? cfg.title() : cfg.title)}</h2>
     <input class=search type=search data-path="@pick.q" value="${esc(p.q)}" placeholder="${p.kind === 'lookup' ? 'Spells, items, creatures, rules…' : 'Search…'}" enterkeyhint=search autofocus
-      title="Enter opens the first result; ↓ moves into the list">${cfg.filters?.() || ''}
+      title="Enter opens the first result; ↓ moves into the list">${cfg.filters ? cfg.filters(fx.btn) : fx.btn && `<div class=inline>${fx.btn}</div>`}${fx.panel}
     <div class=plist>${typo && xs.length ? '<p class="muted small">No exact matches. Close spellings:</p>' : ''}${xs.map(({ x, cat }, i) => {
       const has = cfg.has?.(x);
       return `<div class=prow><button class=grow data-act=pickrow data-i=${i} ${has ? 'disabled' : ''}>${esc(x.name)}${has ? ' ✓' : ''} <small class=muted>${esc(cfg.sub?.(x, cat) ?? x.source)}</small></button>
         ${cfg.noInfo ? '' : `<button class=icon data-act=info data-cat=${cat} data-name="${esc(x.name)}" data-src="${esc(x.source)}" title=Details>i</button>`}</div>`;
-    }).join('') || `<p class=muted>${q ? 'No matches.' : p.kind === 'lookup' ? 'Type to search, or tap None and then a category to browse it.' : 'Type to search.'}</p>`}
+    }).join('') || `<p class=muted>${q ? 'No matches.' : p.kind === 'lookup' ? 'Type to search, set a filter, or tap None and then a category to browse it.' : 'Type to search.'}</p>`}
     ${total > xs.length ? `<p class="muted small">Showing ${xs.length} of ${total}: type more or narrow the filters.</p>` : ''}</div>`;
 }
 function openPicker(kind, extra = {}) {
@@ -1531,6 +1638,20 @@ const ACT = {
   lookupf: el => {
     const off = ui.pick.off, g = el.dataset.g;
     if (g === '*') off.clear(); else if (g === '-') SEARCH_GROUPS.forEach(([x]) => off.add(x)); else off.has(g) ? off.delete(g) : off.add(g);
+    renderDlg();
+  },
+  flt: () => { ui.pick.fx = !ui.pick.fx; renderDlg(); },
+  flttab: el => { ui.pick.fxg = el.dataset.t; renderDlg(); },
+  fltclear: () => { ui.pick.f = {}; renderDlg(); },
+  fltset: el => {
+    const p = ui.pick, [, , g, k] = el.dataset.path.split('.');
+    (p.f[g] ||= {})[k] = el.value;
+    // a category's own filter narrows the lookup to just that category (no mix of entries it filters and ones it can't);
+    // filters left on the others would be hidden, so they go too. Source works on every category and narrows nothing.
+    if (el.value && p.off && g !== 'All') {
+      for (const [x] of SEARCH_GROUPS) if (x === g) p.off.delete(x); else p.off.add(x);
+      for (const x of Object.keys(p.f)) if (x !== g && x !== 'All') delete p.f[x];
+    }
     renderDlg();
   },
   home: () => { location.hash = ''; },

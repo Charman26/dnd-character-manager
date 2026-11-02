@@ -231,6 +231,10 @@ dialog::backdrop { background: rgba(60, 35, 15, .35); }
 @media (max-width: 600px) { .lkf { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 0 2.5em 2px 0;
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5em), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 2.5em), transparent); } .lkf .tog { flex: none; } } /* one swipeable row: results stay above the keyboard */
 .lkf .tog[data-g]:not(.on):not([data-g="*"]):not([data-g="-"]) { text-decoration: line-through; color: var(--muted); }
+.fltbtn { font-weight: 600; } .fltbtn:not(.on) { border-style: dashed; }
+.flt { border-left: 3px solid var(--line); padding-left: .45em; margin: .3em 0; } .flt .inline { gap: .3em; margin: .25em 0; }
+.flts { padding: 0 .15em 0 .55em; gap: .15em; } .flts small { color: var(--accent); } .flts.on { border-color: var(--accent); } /* a set filter keeps its name in front */
+.flts select { padding: .15em 1.3em .15em 0; max-width: 11em; min-height: 26px; field-sizing: content; }
 .prow { display: flex; gap: .2em; border-bottom: 1px dotted var(--line); }
 .prow > button.grow { font-family: var(--serif); text-align: left; background: none; border: none; display: flex; flex-direction: column; align-items: flex-start; }
 .fx { display: grid; grid-template-columns: 1.4fr .8fr 1fr 1fr auto; gap: .3em; align-items: center; font-size: .9em; }

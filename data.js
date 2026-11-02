@@ -12,7 +12,7 @@ const CUTOFF = '2024-09-17'; // 2024 PHB release: books from here on use the 202
 const KEEP = ['class', 'subclass', 'classFeature', 'subclassFeature', 'spell', 'item', 'baseitem', 'magicvariant', 'race', 'subrace', 'background', 'feat', 'condition', 'optionalfeature', 'monster',
   'disease', 'status', 'action', 'language', 'skill', 'sense', 'variantrule', 'trap', 'hazard', 'object', 'deity', 'reward', 'cult', 'boon', 'table'];
 // Creatures are kept only where the sheet uses them: Wild Shape / Polymorph (beasts, elementals), summons, familiars.
-const DROP_FIELDS = ['hasToken', 'tokenCredit', 'altArt', 'environment', 'traitTags', 'senseTags', 'actionTags', 'languageTags', 'damageTags',
+const DROP_FIELDS = ['hasToken', 'tokenCredit', 'altArt', 'traitTags', 'senseTags', 'actionTags', 'languageTags', 'damageTags',
   'damageTagsLegendary', 'damageTagsSpell', 'spellcastingTags', 'conditionInflictSpell', 'savingThrowForced', 'savingThrowForcedLegendary', 'foundryImg', 'treasure', 'otherSources', 'referenceSources', 'lootTables', 'hasFluff', 'hasFluffImages', 'fluff', 'reprintedAs', 'srd', 'srd52', 'basicRules', 'basicRules2024', 'additionalSources', 'soundClip'];
 const K = (n, s) => `${n}|${s}`.toLowerCase();
 
@@ -191,7 +191,7 @@ export const crNum = cr => { const [a, b] = String(cr?.cr ?? cr ?? 0).split('/')
 export const creatureType = m => m.type?.type ?? m.type;
 export const creatureAc = m => { const a = m.ac?.[0]; return typeof a === 'object' ? a.ac : a ?? 10; };
 export const speedText = sp => Object.entries(sp || {}).filter(([k]) => k !== 'canHover').map(([k, v]) => `${k === 'walk' ? '' : k + ' '}${typeof v === 'object' ? v.number : v} ft`).join(', ');
-const SIZE = { T: 'Tiny', S: 'Small', M: 'Medium', L: 'Large', H: 'Huge', G: 'Gargantuan' };
+export const SIZE = { T: 'Tiny', S: 'Small', M: 'Medium', L: 'Large', H: 'Huge', G: 'Gargantuan' };
 // resist/immune lists mix strings with {resist: [...], note} groups
 const flat = v => v.map(x => (typeof x === 'string' ? x : x.special || `${flat(x.resist || x.immune || x.vulnerable || x.conditionImmune || [])}${x.note ? ' ' + x.note : ''}`)).join('; ');
 const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -391,7 +391,7 @@ export function entries(e, inline = false) {
 
 // ---------- detail views ----------
 const ORD = n => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
-const SCHOOL = { A: 'Abjuration', C: 'Conjuration', D: 'Divination', E: 'Enchantment', V: 'Evocation', I: 'Illusion', N: 'Necromancy', T: 'Transmutation' };
+export const SCHOOL = { A: 'Abjuration', C: 'Conjuration', D: 'Divination', E: 'Enchantment', V: 'Evocation', I: 'Illusion', N: 'Necromancy', T: 'Transmutation' };
 export const spellLevel = s => (s.level ? `${ORD(s.level)}-level ${(SCHOOL[s.school] || s.school).toLowerCase()}` : `${SCHOOL[s.school] || s.school} cantrip`) + (s.meta?.ritual ? ' (ritual)' : '');
 export const spellTime = s => (s.time || []).map(t => `${t.number} ${t.unit === 'bonus' ? 'bonus action' : t.unit}${t.condition ? ', ' + t.condition : ''}`).join(' or ');
 export function spellRange(s) {
@@ -415,7 +415,7 @@ const TYPE = {
   SCF: 'Spellcasting focus', $C: 'Coins', MNT: 'Mount', TAH: 'Tack and harness', FD: 'Food and drink', TG: 'Trade good', EXP: 'Explosive', OTH: 'Other',
   $: 'Treasure', $A: 'Art object', $G: 'Gemstone', VEH: 'Vehicle', SHP: 'Ship', AIR: 'Airship', GV: 'Magic item (any)',
 };
-const PROP = { A: 'ammunition', F: 'finesse', H: 'heavy', L: 'light', LD: 'loading', R: 'reach', S: 'special', T: 'thrown', '2H': 'two-handed', V: 'versatile', RLD: 'reload', BF: 'burst fire' };
+export const PROP = { A: 'ammunition', F: 'finesse', H: 'heavy', L: 'light', LD: 'loading', R: 'reach', S: 'special', T: 'thrown', '2H': 'two-handed', V: 'versatile', RLD: 'reload', BF: 'burst fire' };
 export const itemType = x => (x.wondrous ? 'Wondrous item' : TYPE[code(x.type)] || (x.custom ? 'Custom' : 'Item'));
 export function itemLine(x) {
   const a = [x.weaponCategory ? `${x.weaponCategory} ${itemType(x).toLowerCase()}` : itemType(x)];

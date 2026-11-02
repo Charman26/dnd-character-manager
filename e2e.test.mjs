@@ -94,6 +94,28 @@ await check('lookup: every category is searchable, filter chips include/exclude,
   await page.locator('[data-act=lookupf][data-g="-"]').click(); await page.locator('[data-act=lookupf][data-g="Deities & gifts"]').click();
   await page.locator('.prow', { hasText: 'Deity ·' }).first().waitFor(); // listed without typing
   await page.locator('[data-act=lookupf][data-g="*"]').click();
+  // search filters: only the listed categories' show, a set one narrows only its category and lists without typing
+  await page.locator('[data-act=lookupf][data-g="-"]').click(); await page.locator('[data-act=lookupf][data-g="Creatures"]').click();
+  await page.locator('[data-act=flt]').click();
+  assert.equal(await page.locator('[data-act=flttab]').count(), 0, 'one category: no tabs');
+  assert.equal(await page.locator('#dlg .flt select[data-path^="@pick.f.Spells"]').count(), 0, 'no spell filters for creatures');
+  const setF = async (k, v) => { // each set filter re-renders the panel: wait for its chip before the next
+    await page.locator(`#dlg select[data-path="@pick.f.Creatures.${k}"]`).selectOption(v);
+    await page.locator(`#dlg .flts.on select[data-path="@pick.f.Creatures.${k}"]`).waitFor();
+  };
+  await setF('crmin', '20'); await setF('type', 'Dragon');
+  await page.locator('.prow', { hasText: /Ancient Red Dragon/ }).first().waitFor();
+  await page.waitForFunction(() => [...document.querySelectorAll('#dlg .prow small')].every(e => /CR (2\d|30) dragon/.test(e.textContent)), null, { timeout: 3000 })
+    .catch(() => assert.fail('CR 20+ dragons only'));
+  await page.locator('[data-act=lookupf][data-g="*"]').click(); await page.locator('#dlg input.search').fill('fireball');
+  await page.locator('.prow', { hasText: /^Fireball\s*Spell/ }).waitFor(); // other categories unaffected
+  // a category's filter switches the lookup to that category alone and drops the others' filters
+  await page.locator('[data-act=flttab][data-t=Spells]').click();
+  await page.locator('#dlg select[data-path="@pick.f.Spells.level"]').selectOption('3rd');
+  await page.locator('[data-act=lookupf][data-g=Spells].on').waitFor();
+  assert.equal(await page.locator('[data-act=lookupf].on').count(), 1, 'only Spells left on');
+  assert.match(await page.locator('[data-act=flt]').innerText(), /Filters 1/);
+  await page.locator('[data-act=fltclear]').click(); await page.locator('#dlg input.search').fill('');
   await page.keyboard.press('Escape');
 });
 
