@@ -367,3 +367,4 @@ details.item > summary > .grow { flex: 1 1 12em; }
 .fxring { width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 2px solid #f2c14e; opacity: 0; }
 .fxlabel { font: 600 .9rem var(--sans); color: var(--fg); background: rgb(245 231 198 / .85); border-radius: 4px; padding: .05em .4em; opacity: 0;
   max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transform: translateX(-50%); }
+.unmet { color: var(--bad); font-weight: 700; cursor: help; } /* requirements the character doesn't meet: title lists them */
